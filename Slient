@@ -1,5 +1,5 @@
 -- ============================================================================
--- SILENT AIM GEMINI - BẢN ĐẦY ĐỦ GIỮ NGUYÊN CẤU TRÚC CŨ (ĐÃ CHỈNH LỖI/ĐÈ)
+-- SILENT AIM GEMINI - PHẦN 1/2 (CONFIG, SAVE/LOAD, ESP POOL, UI & INPUT)
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -101,7 +101,6 @@ local isFiringInputHeld = false
 local sevenFingerTriggeredThisTouch = false
 local activeTouches = {}
 local activeTouchCount = 0
-local elapsedClock = 0
 
 local function isFiniteNumber(n)
 	return typeof(n) == "number" and n == n and n > -math.huge and n < math.huge
@@ -127,12 +126,14 @@ local function usesChestAimbot()
 end
 
 local function cyclePreset(list, currentVal, fallback)
+	local nextIdx = 1
 	for i, v in ipairs(list) do
 		if v == currentVal then
-			return list[(i % #list) + 1] or fallback
+			nextIdx = (i % #list) + 1
+			break
 		end
 	end
-	return list[1] or fallback
+	return list[nextIdx] or fallback
 end
 
 local function setSaveStatus(msg, isGood)
@@ -144,7 +145,9 @@ end
 
 local function sanitizeSaveName(raw)
 	local trimmed = tostring(raw or ""):gsub("^%s+", ""):gsub("%s+$", "")
-	if trimmed == "" then return "Default" end
+	if trimmed == "" then
+		return "Default"
+	end
 	return trimmed:gsub("[^%w%-%_]", "_")
 end
 
@@ -155,7 +158,9 @@ end
 local function ensureSaveFolder()
 	if type(makefolder) == "function" and type(isfolder) == "function" then
 		pcall(function()
-			if not isfolder(SAVE_FOLDER) then makefolder(SAVE_FOLDER) end
+			if not isfolder(SAVE_FOLDER) then
+				makefolder(SAVE_FOLDER)
+			end
 		end)
 	end
 end
@@ -166,7 +171,9 @@ end
 
 local function serializeValue(val, depth)
 	depth = depth or 0
-	if depth > 6 then return "nil" end
+	if depth > 6 then
+		return "nil"
+	end
 	local t = typeof(val)
 	if t == "boolean" or t == "number" then
 		return tostring(val)
@@ -234,7 +241,7 @@ local function loadAutoLoadMeta()
 		pcall(function() exists = isfile(AUTO_LOAD_META_FILE) end)
 		if exists then
 			local ok, raw = pcall(readfile, AUTO_LOAD_META_FILE)
-			if ok and type(raw) == "string" and type(loadstring) == "function" then
+			if ok and type(raw) == "string" then
 				local fn = loadstring(raw)
 				if type(fn) == "function" then
 					local okRun, data = pcall(fn)
@@ -256,14 +263,16 @@ local function loadConfigByName(rawName, silentMode)
 		pcall(function() exists = isfile(path) end)
 		if exists then
 			local ok, raw = pcall(readfile, path)
-			if ok and type(raw) == "string" and type(loadstring) == "function" then
+			if ok and type(raw) == "string" then
 				local fn = loadstring(raw)
 				if type(fn) == "function" then
 					local okRun, data = pcall(fn)
 					if okRun and type(data) == "table" then
 						applyConfigTable(data)
 						Config.SaveName = cleanName
-						if not silentMode then setSaveStatus("Đã tải save: " .. cleanName, true) end
+						if not silentMode then
+							setSaveStatus("Đã tải save: " .. cleanName, true)
+						end
 						return true
 					end
 				end
@@ -274,11 +283,15 @@ local function loadConfigByName(rawName, silentMode)
 	if MemorySaves[cleanName] then
 		applyConfigTable(MemorySaves[cleanName])
 		Config.SaveName = cleanName
-		if not silentMode then setSaveStatus("Đã tải save: " .. cleanName, true) end
+		if not silentMode then
+			setSaveStatus("Đã tải save: " .. cleanName, true)
+		end
 		return true
 	end
 
-	if not silentMode then setSaveStatus("Không tìm thấy: " .. cleanName, false) end
+	if not silentMode then
+		setSaveStatus("Không tìm thấy: " .. cleanName, false)
+	end
 	return false
 end
 
@@ -298,7 +311,11 @@ local function deleteConfigByName(rawName)
 			if ok then deleted = true end
 		end
 	end
-	setSaveStatus(deleted and ("Đã xóa save: " .. cleanName) or ("Chưa có save tên: " .. cleanName), deleted)
+	if deleted then
+		setSaveStatus("Đã xóa save: " .. cleanName, true)
+	else
+		setSaveStatus("Chưa có save tên: " .. cleanName, false)
+	end
 end
 
 local function getBoxRangeText() return "Tầm nhìn Box: " .. tostring(Config.BoxMaxDistance) end
@@ -341,7 +358,9 @@ local function hideAllEspVisuals()
 		if entry.botLine then entry.botLine.Visible = false end
 		if entry.headDot then entry.headDot.Visible = false end
 		if entry.bones then
-			for _, bone in ipairs(entry.bones) do bone.Visible = false end
+			for _, bone in ipairs(entry.bones) do
+				bone.Visible = false
+			end
 		end
 	end
 end
@@ -357,7 +376,7 @@ local function getOrCreateEspVisual(key)
 	boxFrame.BorderSizePixel = 0
 	boxFrame.Visible = false
 	boxFrame.Active = false
-	boxFrame.ZIndex = 12
+	boxFrame.ZIndex = 2
 	boxFrame.Parent = EspOverlayFolder
 
 	local boxStroke = Instance.new("UIStroke")
@@ -372,7 +391,7 @@ local function getOrCreateEspVisual(key)
 	hpBg.BorderSizePixel = 0
 	hpBg.Visible = false
 	hpBg.Active = false
-	hpBg.ZIndex = 12
+	hpBg.ZIndex = 2
 	hpBg.Parent = EspOverlayFolder
 
 	local hpFill = Instance.new("Frame")
@@ -383,7 +402,7 @@ local function getOrCreateEspVisual(key)
 	hpFill.BackgroundColor3 = COLOR_HP_GREEN
 	hpFill.BorderSizePixel = 0
 	hpFill.Active = false
-	hpFill.ZIndex = 13
+	hpFill.ZIndex = 3
 	hpFill.Parent = hpBg
 
 	local headDot = Instance.new("Frame")
@@ -395,7 +414,7 @@ local function getOrCreateEspVisual(key)
 	headDot.BorderSizePixel = 0
 	headDot.Visible = false
 	headDot.Active = false
-	headDot.ZIndex = 13
+	headDot.ZIndex = 3
 	headDot.Parent = EspOverlayFolder
 
 	local headDotCorner = Instance.new("UICorner")
@@ -411,7 +430,7 @@ local function getOrCreateEspVisual(key)
 		line.BorderSizePixel = 0
 		line.Visible = false
 		line.Active = false
-		line.ZIndex = 11
+		line.ZIndex = 1
 		line.Parent = EspOverlayFolder
 		return line
 	end
@@ -419,7 +438,9 @@ local function getOrCreateEspVisual(key)
 	local topLine = makeThinLine("TopLine")
 	local botLine = makeThinLine("BotLine")
 	local bones = {}
-	for i = 1, 11 do bones[i] = makeThinLine("Bone" .. tostring(i)) end
+	for i = 1, 11 do
+		bones[i] = makeThinLine("Bone" .. tostring(i))
+	end
 
 	entry = {
 		boxFrame = boxFrame,
@@ -448,9 +469,10 @@ local function positionThinSegment(frame, pA, pB, color, thickness)
 		return
 	end
 	local mid = (pA + pB) * 0.5
+	local angle = math.deg(math.atan2(delta.Y, delta.X))
 	frame.Size = UDim2.new(0, dist, 0, thickness or 1)
 	frame.Position = UDim2.new(0, mid.X, 0, mid.Y)
-	frame.Rotation = math.deg(math.atan2(delta.Y, delta.X))
+	frame.Rotation = angle
 	frame.BackgroundColor3 = color
 	frame.Visible = true
 end
@@ -466,13 +488,18 @@ local function updateFOVVisual()
 		FOVFrame.Size = UDim2.new(0, Config.FOVRadius * 2, 0, Config.FOVRadius * 2)
 		FOVFrame.Visible = active and Config.ShowFOV and usesSilentAim()
 	end
-	if FOVLabel then FOVLabel.Text = "FOV Silent: " .. tostring(Config.FOVRadius) end
+	if FOVLabel then
+		FOVLabel.Text = "FOV Silent: " .. tostring(Config.FOVRadius)
+	end
 	if AimbotFOVFrame then
-		Config.AimbotFOVRadius = math.clamp(Config.AimbotFOVRadius, 10, 120)
-		AimbotFOVFrame.Size = UDim2.new(0, Config.AimbotFOVRadius * 2, 0, Config.AimbotFOVRadius * 2)
+		local clampedAimFOV = math.clamp(Config.AimbotFOVRadius, 10, 120)
+		Config.AimbotFOVRadius = clampedAimFOV
+		AimbotFOVFrame.Size = UDim2.new(0, clampedAimFOV * 2, 0, clampedAimFOV * 2)
 		AimbotFOVFrame.Visible = active and Config.ShowAimbotFOV and usesChestAimbot()
 	end
-	if AimbotFOVLabel then AimbotFOVLabel.Text = "FOV Aimbot: " .. tostring(Config.AimbotFOVRadius) end
+	if AimbotFOVLabel then
+		AimbotFOVLabel.Text = "FOV Aimbot: " .. tostring(Config.AimbotFOVRadius)
+	end
 	if not active then
 		hideTargetLine()
 		hideAllEspVisuals()
@@ -542,7 +569,9 @@ local function isLocalPlayerOnVehicleOrMovingPlatform()
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	local hrp = char:FindFirstChild("HumanoidRootPart")
 
-	if hum and ((hum.SeatPart and hum.SeatPart:IsA("BasePart")) or hum.Sit) then return true end
+	if hum and ((hum.SeatPart and hum.SeatPart:IsA("BasePart")) or hum.Sit) then
+		return true
+	end
 	if hrp and hrp:IsA("BasePart") then
 		local rootAssembly = hrp:GetRootPart()
 		if rootAssembly and rootAssembly ~= hrp and rootAssembly:IsA("BasePart") then
@@ -551,15 +580,17 @@ local function isLocalPlayerOnVehicleOrMovingPlatform()
 		end
 		local hrpVel = hrp.AssemblyLinearVelocity
 		local moveMag = hum and hum.MoveDirection.Magnitude or 0
-		if isFiniteVector3(hrpVel) and moveMag < 0.08 and hrpVel.Magnitude > 5.5 then return true end
+		if isFiniteVector3(hrpVel) and moveMag < 0.08 and hrpVel.Magnitude > 5.5 then
+			return true
+		end
 	end
 	return false
 end
 
 local function syncVehicleAutoState()
-	local onMoving = isLocalPlayerOnVehicleOrMovingPlatform()
-	if onMoving ~= pausedByVehicle then
-		pausedByVehicle = onMoving
+	local onMovingVehicleOrPlatform = isLocalPlayerOnVehicleOrMovingPlatform()
+	if onMovingVehicleOrPlatform ~= pausedByVehicle then
+		pausedByVehicle = onMovingVehicleOrPlatform
 		Config.Enabled = not pausedByVehicle and userDesiredEnabled
 		refreshSilentToggleButton()
 		updateFOVVisual()
@@ -568,11 +599,15 @@ end
 
 local function isTargetOnVehicleOrMovingPlatform(model, part, hum)
 	if not model then return false end
-	if hum and (hum.Sit or (hum.SeatPart and hum.SeatPart:IsA("BasePart"))) then return true end
+	if hum and (hum.Sit or (hum.SeatPart and hum.SeatPart:IsA("BasePart"))) then
+		return true
+	end
 	local hrp = model:FindFirstChild("HumanoidRootPart")
 	if hrp and hrp:IsA("BasePart") then
 		local vel = hrp.AssemblyLinearVelocity
-		if isFiniteVector3(vel) and hum and hum.MoveDirection.Magnitude < 0.05 and vel.Magnitude > 4 then return true end
+		if isFiniteVector3(vel) and hum and hum.MoveDirection.Magnitude < 0.05 and vel.Magnitude > 4 then
+			return true
+		end
 	end
 	if part and part:IsA("BasePart") then
 		local rootAssembly = part:GetRootPart()
@@ -622,10 +657,6 @@ local function updateTargetLineAndEsp(cam, startPos2D, worldPoint, isBlockedByWa
 	end
 end
 
--- Khóa ngắn mục tiêu ngẫu nhiên theo model để tránh đổi part liên tục làm lệch điểm bắn
-local silentPartLock = {}
-local silentPartLockExpiry = {}
-
 local function pickModelTargetPart(model)
 	if not model then return nil end
 	local head = model:FindFirstChild("Head")
@@ -634,16 +665,8 @@ local function pickModelTargetPart(model)
 		local hasHead = head and head:IsA("BasePart")
 		local hasHrp = hrp and hrp:IsA("BasePart")
 		if hasHead and hasHrp then
-			local exp = silentPartLockExpiry[model] or 0
-			local locked = silentPartLock[model]
-			if locked and locked.Parent == model and elapsedClock < exp then
-				return locked
-			end
 			local chance = math.clamp(tonumber(Config.HeadshotChance) or 50, 0, 100)
-			local chosenRandom = (math.random(1, 100) <= chance) and head or hrp
-			silentPartLock[model] = chosenRandom
-			silentPartLockExpiry[model] = elapsedClock + 0.35
-			return chosenRandom
+			return (math.random(1, 100) <= chance) and head or hrp
 		end
 		return (hasHead and head) or (hasHrp and hrp) or nil
 	end
@@ -660,32 +683,15 @@ local function pickChestPart(model)
 	return nil
 end
 
--- Xóa GUI cũ trùng tên trước khi gắn để tránh bị đè nhiều lớp giao diện
 local function mountGui(gui)
-	local targets = {}
-	local okPlayerGui, playerGui = pcall(function()
-		return LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 10)
-	end)
-	if okPlayerGui and playerGui then table.insert(targets, playerGui) end
-	if type(gethui) == "function" then
+	local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 10)
+	if gethui then
 		local ok, hui = pcall(gethui)
-		if ok and hui then table.insert(targets, hui) end
+		if ok and hui and pcall(function() gui.Parent = hui end) then return true end
 	end
 	local okCore, core = pcall(function() return game:GetService("CoreGui") end)
-	if okCore and core then table.insert(targets, core) end
-
-	for _, container in ipairs(targets) do
-		pcall(function()
-			local old = container:FindFirstChild("SilentAimGeminiGUI")
-			if old then old:Destroy() end
-		end)
-	end
-
-	for _, container in ipairs(targets) do
-		if pcall(function() gui.Parent = container end) then
-			return true
-		end
-	end
+	if okCore and core and pcall(function() gui.Parent = core end) then return true end
+	if playerGui and pcall(function() gui.Parent = playerGui end) then return true end
 	return false
 end
 
@@ -746,13 +752,12 @@ local function applyMenuVisibilityAndMinimize()
 	end
 end
 
--- Khởi tạo UI trong block riêng, phân tầng ZIndex rõ ràng để không bị đè hoặc chèn
 pcall(function()
 	ScreenGui = Instance.new("ScreenGui")
 	ScreenGui.Name = "SilentAimGeminiGUI"
 	ScreenGui.ResetOnSpawn = false
 	ScreenGui.IgnoreGuiInset = true
-	ScreenGui.DisplayOrder = 100000
+	ScreenGui.DisplayOrder = 999999
 	ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 	EspOverlayFolder = Instance.new("Folder")
@@ -769,7 +774,7 @@ pcall(function()
 	TargetLineFrame.BorderSizePixel = 0
 	TargetLineFrame.Visible = false
 	TargetLineFrame.Active = false
-	TargetLineFrame.ZIndex = 12
+	TargetLineFrame.ZIndex = 2
 	TargetLineFrame.Parent = ScreenGui
 
 	EspInfoLabel = Instance.new("TextLabel")
@@ -783,7 +788,7 @@ pcall(function()
 	EspInfoLabel.TextSize = 11
 	EspInfoLabel.Visible = false
 	EspInfoLabel.Active = false
-	EspInfoLabel.ZIndex = 13
+	EspInfoLabel.ZIndex = 3
 	EspInfoLabel.Parent = ScreenGui
 
 	FOVFrame = Instance.new("Frame")
@@ -794,7 +799,7 @@ pcall(function()
 	FOVFrame.BackgroundTransparency = 1
 	FOVFrame.Visible = false
 	FOVFrame.Active = false
-	FOVFrame.ZIndex = 11
+	FOVFrame.ZIndex = 1
 	FOVFrame.Parent = ScreenGui
 
 	local fovCorner = Instance.new("UICorner")
@@ -814,7 +819,7 @@ pcall(function()
 	AimbotFOVFrame.BackgroundTransparency = 1
 	AimbotFOVFrame.Visible = false
 	AimbotFOVFrame.Active = false
-	AimbotFOVFrame.ZIndex = 12
+	AimbotFOVFrame.ZIndex = 2
 	AimbotFOVFrame.Parent = ScreenGui
 
 	local aimFovCorner = Instance.new("UICorner")
@@ -833,8 +838,7 @@ pcall(function()
 	MainFrame.BackgroundColor3 = COLOR_BG_DARK
 	MainFrame.BorderSizePixel = 0
 	MainFrame.ClipsDescendants = true
-	MainFrame.Active = true
-	MainFrame.ZIndex = 30
+	MainFrame.ZIndex = 10
 	MainFrame.Parent = ScreenGui
 
 	local mainCorner = Instance.new("UICorner")
@@ -851,7 +855,7 @@ pcall(function()
 	TopBar.Size = UDim2.new(1, 0, 0, MENU_MIN_HEIGHT)
 	TopBar.BackgroundColor3 = COLOR_HEADER_DARK
 	TopBar.BorderSizePixel = 0
-	TopBar.ZIndex = 31
+	TopBar.ZIndex = 11
 	TopBar.Parent = MainFrame
 
 	local statusDot = Instance.new("Frame")
@@ -859,7 +863,7 @@ pcall(function()
 	statusDot.Position = UDim2.new(0, 10, 0.5, -4)
 	statusDot.BackgroundColor3 = COLOR_ACCENT_GREEN
 	statusDot.BorderSizePixel = 0
-	statusDot.ZIndex = 32
+	statusDot.ZIndex = 12
 	statusDot.Parent = TopBar
 
 	local dotCorner = Instance.new("UICorner")
@@ -875,7 +879,7 @@ pcall(function()
 	Title.Font = Enum.Font.GothamBold
 	Title.TextSize = 12
 	Title.TextXAlignment = Enum.TextXAlignment.Left
-	Title.ZIndex = 32
+	Title.ZIndex = 12
 	Title.Parent = TopBar
 
 	HButton = Instance.new("TextButton")
@@ -888,7 +892,7 @@ pcall(function()
 	HButton.Font = Enum.Font.GothamBlack
 	HButton.TextSize = 20
 	HButton.Visible = false
-	HButton.ZIndex = 32
+	HButton.ZIndex = 12
 	HButton.Parent = MainFrame
 
 	local hCorner = Instance.new("UICorner")
@@ -938,7 +942,7 @@ pcall(function()
 	MinBtn.TextColor3 = Color3.fromRGB(235, 238, 242)
 	MinBtn.Font = Enum.Font.GothamBold
 	MinBtn.TextSize = 14
-	MinBtn.ZIndex = 33
+	MinBtn.ZIndex = 12
 	MinBtn.Parent = TopBar
 
 	local minCorner = Instance.new("UICorner")
@@ -951,7 +955,7 @@ pcall(function()
 	TabBar.Position = UDim2.new(0, 0, 0, MENU_MIN_HEIGHT)
 	TabBar.BackgroundColor3 = COLOR_HEADER_DARK
 	TabBar.BorderSizePixel = 0
-	TabBar.ZIndex = 31
+	TabBar.ZIndex = 11
 	TabBar.Parent = MainFrame
 
 	local tabLayout = Instance.new("UIListLayout")
@@ -980,7 +984,7 @@ pcall(function()
 		page.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
 		page.CanvasSize = UDim2.new(0, 0, 0, 0)
 		page.Visible = false
-		page.ZIndex = 31
+		page.ZIndex = 11
 		page.Parent = MainFrame
 
 		local list = Instance.new("UIListLayout")
@@ -1010,7 +1014,7 @@ pcall(function()
 		tBtn.Font = Enum.Font.GothamSemibold
 		tBtn.TextSize = 11
 		tBtn.LayoutOrder = idx
-		tBtn.ZIndex = 32
+		tBtn.ZIndex = 12
 		tBtn.Parent = TabBar
 
 		local tCorner = Instance.new("UICorner")
@@ -1031,7 +1035,7 @@ pcall(function()
 		btn.Font = Enum.Font.GothamSemibold
 		btn.TextSize = 12
 		btn.LayoutOrder = order
-		btn.ZIndex = 32
+		btn.ZIndex = 12
 		btn.Parent = parent
 
 		local corner = Instance.new("UICorner")
@@ -1050,7 +1054,7 @@ pcall(function()
 		frame.Size = UDim2.new(1, 0, 0, 30)
 		frame.BackgroundColor3 = COLOR_ITEM_DARK
 		frame.LayoutOrder = order
-		frame.ZIndex = 32
+		frame.ZIndex = 12
 		frame.Parent = parent
 
 		local corner = Instance.new("UICorner")
@@ -1069,7 +1073,7 @@ pcall(function()
 		minusBtn.TextColor3 = Color3.fromRGB(240, 242, 245)
 		minusBtn.Font = Enum.Font.GothamBold
 		minusBtn.TextSize = 11
-		minusBtn.ZIndex = 33
+		minusBtn.ZIndex = 13
 		minusBtn.Parent = frame
 
 		local mCorner = Instance.new("UICorner")
@@ -1084,7 +1088,7 @@ pcall(function()
 		lbl.TextColor3 = textColor or Color3.fromRGB(235, 238, 242)
 		lbl.Font = Enum.Font.GothamSemibold
 		lbl.TextSize = 12
-		lbl.ZIndex = 33
+		lbl.ZIndex = 13
 		lbl.Parent = frame
 
 		local plusBtn = Instance.new("TextButton")
@@ -1095,7 +1099,7 @@ pcall(function()
 		plusBtn.TextColor3 = Color3.fromRGB(240, 242, 245)
 		plusBtn.Font = Enum.Font.GothamBold
 		plusBtn.TextSize = 11
-		plusBtn.ZIndex = 33
+		plusBtn.ZIndex = 13
 		plusBtn.Parent = frame
 
 		local pCorner = Instance.new("UICorner")
@@ -1104,6 +1108,7 @@ pcall(function()
 		return lbl, minusBtn, plusBtn
 	end
 
+	-- TAB 1: SILENT AIM
 	local silentPage = PageFrames["Silent Aim"]
 	ToggleSilentBtn = createButton(silentPage, "Silent Aim: TẮT", 1)
 	AimModeBtn = createButton(silentPage, getAimModeText(), 2)
@@ -1118,6 +1123,7 @@ pcall(function()
 	local FOVMinus, FOVPlus
 	FOVLabel, FOVMinus, FOVPlus = createStepper(silentPage, "FOV Silent: " .. tostring(Config.FOVRadius), "-15", "+15", Color3.fromRGB(160, 240, 220), 11)
 
+	-- TAB 2: AIMBOT
 	local aimbotPage = PageFrames["Aimbot"]
 	AimEngineBtn = createButton(aimbotPage, getAimEngineText(), 1)
 	AimbotStickBtn = createButton(aimbotPage, getAimbotStickText(), 2)
@@ -1126,6 +1132,7 @@ pcall(function()
 	local AimFOVMinus, AimFOVPlus
 	AimbotFOVLabel, AimFOVMinus, AimFOVPlus = createStepper(aimbotPage, "FOV Aimbot: " .. tostring(Config.AimbotFOVRadius), "-10", "+10", Color3.fromRGB(255, 115, 125), 5)
 
+	-- TAB 3: ESP
 	local espPage = PageFrames["ESP"]
 	ToggleBox2DBtn = createButton(espPage, getToggleBox2DText(), 1)
 	ToggleHealthBarBtn = createButton(espPage, getToggleHealthBarText(), 2)
@@ -1138,6 +1145,7 @@ pcall(function()
 	ToggleEspInfoBtn = createButton(espPage, "Tên & Khoảng cách ESP: TẮT", 9)
 	TeamCheckBtn = createButton(espPage, "Kiểm tra đồng đội: TẮT", 10)
 
+	-- TAB 4: SETTINGS
 	local settingsPage = PageFrames["Settings"]
 	AntiKickBtn = createButton(settingsPage, getAntiKickText(), 1)
 	AntiKickBtn.BackgroundColor3 = Color3.fromRGB(56, 118, 29)
@@ -1152,7 +1160,7 @@ pcall(function()
 	saveNameRow.Size = UDim2.new(1, 0, 0, 30)
 	saveNameRow.BackgroundColor3 = COLOR_ITEM_DARK
 	saveNameRow.LayoutOrder = 5
-	saveNameRow.ZIndex = 32
+	saveNameRow.ZIndex = 12
 	saveNameRow.Parent = settingsPage
 
 	local snCorner = Instance.new("UICorner")
@@ -1173,7 +1181,7 @@ pcall(function()
 	snPrefix.Font = Enum.Font.GothamSemibold
 	snPrefix.TextSize = 11
 	snPrefix.TextXAlignment = Enum.TextXAlignment.Left
-	snPrefix.ZIndex = 33
+	snPrefix.ZIndex = 13
 	snPrefix.Parent = saveNameRow
 
 	SaveNameBox = Instance.new("TextBox")
@@ -1187,7 +1195,7 @@ pcall(function()
 	SaveNameBox.Font = Enum.Font.GothamSemibold
 	SaveNameBox.TextSize = 11
 	SaveNameBox.ClearTextOnFocus = false
-	SaveNameBox.ZIndex = 33
+	SaveNameBox.ZIndex = 13
 	SaveNameBox.Parent = saveNameRow
 
 	local boxCorner = Instance.new("UICorner")
@@ -1208,7 +1216,7 @@ pcall(function()
 	SaveStatusLabel.Font = Enum.Font.Gotham
 	SaveStatusLabel.TextSize = 11
 	SaveStatusLabel.LayoutOrder = 11
-	SaveStatusLabel.ZIndex = 32
+	SaveStatusLabel.ZIndex = 12
 	SaveStatusLabel.Parent = settingsPage
 
 	MinBtn.MouseButton1Click:Connect(function()
@@ -1351,7 +1359,9 @@ pcall(function()
 	end)
 	SaveBtn.MouseButton1Click:Connect(function()
 		saveConfigByName(SaveNameBox and SaveNameBox.Text or Config.SaveName)
-		if Config.AutoLoadEnabled then saveAutoLoadMeta(true, Config.SaveName) end
+		if Config.AutoLoadEnabled then
+			saveAutoLoadMeta(true, Config.SaveName)
+		end
 	end)
 	AutoLoadToggleBtn.MouseButton1Click:Connect(function()
 		Config.AutoLoadEnabled = not Config.AutoLoadEnabled
@@ -1449,7 +1459,9 @@ UserInputService.InputEnded:Connect(function(input)
 		if activeTouchCount < 7 then sevenFingerTriggeredThisTouch = false end
 		if activeTouchCount == 0 then isFiringInputHeld = false end
 	end
-end)
+end)-- ============================================================================
+-- SILENT AIM GEMINI - PHẦN 2/2 (ĐOÁN HƯỚNG, ESP, AIMBOT, HOOK & ANTI-BAN)
+-- ============================================================================
 
 local CachedTarget = nil
 local CachedAimPos = nil
@@ -1466,6 +1478,7 @@ local lastRainbowUpdateTime = 0
 local lastWallCheckTime = 0
 local lastSeatCheckTime = 0
 local lastEspRenderTime = 0
+local elapsedClock = 0
 local isScanningNpc = false
 
 local CachedNpcEntries = {}
@@ -1479,7 +1492,9 @@ local SharedWallParams = RaycastParams.new()
 SharedWallParams.FilterType = Enum.RaycastFilterType.Exclude
 
 local function logDebug(msg)
-	if Config.DebugLog then print("[SilentAimGemini] " .. tostring(msg)) end
+	if Config.DebugLog then
+		print("[SilentAimGemini] " .. tostring(msg))
+	end
 end
 
 local function isCurrentlyFiring()
@@ -1490,16 +1505,22 @@ local function getOriginPosition(cam)
 	local char = LocalPlayer.Character
 	if char then
 		local hrp = char:FindFirstChild("HumanoidRootPart")
-		if hrp and hrp:IsA("BasePart") and isFiniteVector3(hrp.Position) then return hrp.Position end
+		if hrp and hrp:IsA("BasePart") and isFiniteVector3(hrp.Position) then
+			return hrp.Position
+		end
 	end
-	if cam and isFiniteVector3(cam.CFrame.Position) then return cam.CFrame.Position end
+	if cam and isFiniteVector3(cam.CFrame.Position) then
+		return cam.CFrame.Position
+	end
 	return Vector3.zero
 end
 
 local function rebuildPlayerCharacterSet()
 	table.clear(PlayerCharacterSet)
 	for _, player in ipairs(Players:GetPlayers()) do
-		if player.Character then PlayerCharacterSet[player.Character] = true end
+		if player.Character then
+			PlayerCharacterSet[player.Character] = true
+		end
 	end
 end
 
@@ -1513,14 +1534,18 @@ local function triggerAsyncNpcScan()
 			for _, obj in ipairs(Workspace:GetChildren()) do
 				if obj:IsA("Model") and obj ~= myChar and not PlayerCharacterSet[obj] then
 					local hum = obj:FindFirstChildOfClass("Humanoid")
-					if hum and hum.Health > 0 then table.insert(newEntries, { model = obj, hum = hum }) end
+					if hum and hum.Health > 0 then
+						table.insert(newEntries, { model = obj, hum = hum })
+					end
 				end
 			end
 			if #newEntries == 0 then
 				for _, obj in ipairs(Workspace:GetDescendants()) do
 					if obj:IsA("Model") and obj ~= myChar and not PlayerCharacterSet[obj] then
 						local hum = obj:FindFirstChildOfClass("Humanoid")
-						if hum and hum.Health > 0 then table.insert(newEntries, { model = obj, hum = hum }) end
+						if hum and hum.Health > 0 then
+							table.insert(newEntries, { model = obj, hum = hum })
+						end
 					end
 				end
 			end
@@ -1531,17 +1556,19 @@ local function triggerAsyncNpcScan()
 end
 
 local function estimateTargetVelocity(part, dt, distance)
-	if not part or not part:IsA("BasePart") or not isFiniteVector3(part.Position) then return Vector3.zero end
+	if not part or not part:IsA("BasePart") or not isFiniteVector3(part.Position) then
+		return Vector3.zero
+	end
 	local currentPos = part.Position
-	local assemblyVel = isFiniteVector3(part.AssemblyLinearVelocity) and part.AssemblyLinearVelocity or Vector3.zero
+	local assemblyVel = part.AssemblyLinearVelocity
+	if not isFiniteVector3(assemblyVel) then assemblyVel = Vector3.zero end
 	local estimatedVel = assemblyVel
 
-	local realDt = (prevSampleTime and (elapsedClock - prevSampleTime) > 0.001) and (elapsedClock - prevSampleTime) or dt
-	if prevTargetPart == part and prevTargetPos and realDt and realDt > 0.001 then
-		local frameVel = (currentPos - prevTargetPos) / realDt
-		if isFiniteVector3(frameVel) and frameVel.Magnitude < 240 then
+	if prevTargetPart == part and prevTargetPos and prevSampleTime and dt > 0.001 then
+		local frameVel = (currentPos - prevTargetPos) / dt
+		if isFiniteVector3(frameVel) and frameVel.Magnitude < 260 then
 			local farFactor = Config.AutoSmartAim and math.clamp(((distance or 0) - 70) / 350, 0, 1) or 0
-			local blend = 0.68 - (farFactor * 0.18)
+			local blend = 0.72 - (farFactor * 0.22)
 			estimatedVel = (assemblyVel.Magnitude > frameVel.Magnitude * 0.5) and assemblyVel:Lerp(frameVel, blend) or frameVel
 		end
 	end
@@ -1556,21 +1583,31 @@ end
 local function computePredictedPosition(origin, part, velocity)
 	if not part or not isFiniteVector3(part.Position) then return nil end
 	local basePos = part.Position
-	if Config.StraightBullet or not Config.AutoSmartAim or not isFiniteVector3(origin) then return basePos end
+	if Config.StraightBullet or not Config.AutoSmartAim or not isFiniteVector3(origin) then
+		return basePos
+	end
 	local dist = (basePos - origin).Magnitude
 	local moveSpeed = isFiniteVector3(velocity) and velocity.Magnitude or 0
-	if moveSpeed < 1.3 then return basePos end
+	if moveSpeed < 1.2 then return basePos end
 
-	local nearScale = math.clamp((dist - 15) / 34, 0, 1)
+	local nearScale = math.clamp((dist - 12) / 34, 0, 1)
 	if nearScale <= 0.02 then return basePos end
 
 	local farFactor = math.clamp((dist - 55) / 360, 0, 1)
-	local effectiveSpeed = math.max(200, Config.BulletSpeed * (1 - farFactor * 0.2))
+	local effectiveSpeed = math.max(170, Config.BulletSpeed * (1 - farFactor * 0.24))
 	local rawLead = dist / effectiveSpeed
-	local dynamicMaxLead = math.min(Config.MaxLeadTime, 0.14 + (farFactor * 0.2))
+	local dynamicMaxLead = math.min(Config.MaxLeadTime, 0.16 + (farFactor * 0.26))
 	local leadTime = math.clamp(rawLead * nearScale, 0, dynamicMaxLead)
 
-	local predicted = basePos + (velocity * leadTime)
+	local accelTerm = Vector3.zero
+	if prevTargetVel and isFiniteVector3(prevTargetVel) then
+		local accel = (velocity - prevTargetVel) / 0.016
+		if isFiniteVector3(accel) and accel.Magnitude < 180 then
+			accelTerm = accel * (0.5 * leadTime * leadTime) * 0.45
+		end
+	end
+
+	local predicted = basePos + (velocity * leadTime) + accelTerm
 	return isFiniteVector3(predicted) and predicted or basePos
 end
 
@@ -1626,14 +1663,21 @@ local function isWithinSafeServerAngle(cam, worldPos)
 	local toTarget = worldPos - cam.CFrame.Position
 	if toTarget.Magnitude <= 12 then return true end
 	local dot = math.clamp(lookDir.Unit:Dot(toTarget.Unit), -1, 1)
-	return math.deg(math.acos(dot)) <= Config.MaxSafeAngleDeg
+	local angleDeg = math.deg(math.acos(dot))
+	return angleDeg <= Config.MaxSafeAngleDeg
 end
 
 local function evaluateCandidateModel(model, hum, cam, originPos, centerX, centerY, shortestDistance, partPicker, fovLimit, wallFlag)
 	local part = partPicker(model)
-	if not part or not part:IsA("BasePart") or not isFiniteVector3(part.Position) then return nil, shortestDistance end
-	if not isWithinMaxDistance(originPos, part) then return nil, shortestDistance end
-	if not isWithinSafeServerAngle(cam, part.Position) then return nil, shortestDistance end
+	if not part or not part:IsA("BasePart") or not isFiniteVector3(part.Position) then
+		return nil, shortestDistance
+	end
+	if not isWithinMaxDistance(originPos, part) then
+		return nil, shortestDistance
+	end
+	if not isWithinSafeServerAngle(cam, part.Position) then
+		return nil, shortestDistance
+	end
 	local screenPos, onScreen = cam:WorldToViewportPoint(part.Position)
 	if onScreen and isFiniteNumber(screenPos.Z) and screenPos.Z > 0 and isFiniteNumber(screenPos.X) and isFiniteNumber(screenPos.Y) then
 		local dx = screenPos.X - centerX
@@ -1659,6 +1703,7 @@ local function findBestTarget(partPicker, fovLimit, wallFlag)
 
 	local checkPlayers = shouldTargetPlayers()
 	local checkNpcs = shouldTargetNpcs()
+
 	if checkPlayers or checkNpcs then rebuildPlayerCharacterSet() end
 
 	if checkPlayers then
@@ -1702,23 +1747,30 @@ end
 local function applyChestAimbotWhenFiring(cam, targetPart, aimPos, stickPercent)
 	if not cam or not targetPart or not aimPos or not isFiniteVector3(aimPos) then return end
 	if not isCurrentlyFiring() then return end
+
 	local cf = cam.CFrame
 	if not isFiniteVector3(cf.Position) then return end
+
 	local desiredLook = aimPos - cf.Position
 	if not isFiniteVector3(desiredLook) or desiredLook.Magnitude <= 1e-4 then return end
+
 	local targetCFrame = CFrame.lookAt(cf.Position, cf.Position + desiredLook.Unit)
 	local clampedStick = math.clamp(tonumber(stickPercent) or 70, 10, 100)
+
 	if clampedStick >= 100 then
 		cam.CFrame = targetCFrame
 	else
-		cam.CFrame = cf:Lerp(targetCFrame, math.clamp((clampedStick / 100) * 0.65, 0.06, 0.65))
+		local alpha = math.clamp((clampedStick / 100) * 0.65, 0.06, 0.65)
+		cam.CFrame = cf:Lerp(targetCFrame, alpha)
 	end
 end
 
 local function toScreen2D(cam, worldPos)
 	if not cam or not isFiniteVector3(worldPos) then return nil end
 	local sp, onScreen = cam:WorldToViewportPoint(worldPos)
-	if not onScreen or not isFiniteNumber(sp.Z) or sp.Z <= 0 or not isFiniteNumber(sp.X) or not isFiniteNumber(sp.Y) then return nil end
+	if not onScreen or not isFiniteNumber(sp.Z) or sp.Z <= 0 or not isFiniteNumber(sp.X) or not isFiniteNumber(sp.Y) then
+		return nil
+	end
 	return Vector2.new(sp.X, sp.Y)
 end
 
@@ -1761,8 +1813,11 @@ local function renderEspForModels(cam, originPos)
 		local inLineSkelRange = (showTop or showBot or showSkel) and (dist <= Config.LineSkeletonMaxDistance)
 		if not inBoxRange and not inLineSkelRange then return end
 
-		local headTopWorld = (head and head:IsA("BasePart") and isFiniteVector3(head.Position)) and (head.Position + Vector3.new(0, 0.72, 0)) or (anchorPart.Position + Vector3.new(0, 2.35, 0))
+		local headTopWorld = (head and head:IsA("BasePart") and isFiniteVector3(head.Position))
+			and (head.Position + Vector3.new(0, 0.72, 0))
+			or (anchorPart.Position + Vector3.new(0, 2.35, 0))
 		local footWorld = anchorPart.Position - Vector3.new(0, 3.1, 0)
+
 		local topPt = toScreen2D(cam, headTopWorld)
 		local botPt = toScreen2D(cam, footWorld)
 		local centerPt = toScreen2D(cam, anchorPart.Position)
@@ -1809,11 +1864,17 @@ local function renderEspForModels(cam, originPos)
 			end
 		end
 
-		if inLineSkelRange and showTop then positionThinSegment(visual.topLine, topCenter, topPt, espColor, 1)
-		elseif visual.topLine then visual.topLine.Visible = false end
+		if inLineSkelRange and showTop then
+			positionThinSegment(visual.topLine, topCenter, topPt, espColor, 1)
+		elseif visual.topLine then
+			visual.topLine.Visible = false
+		end
 
-		if inLineSkelRange and showBot then positionThinSegment(visual.botLine, botCenter, botPt, espColor, 1)
-		elseif visual.botLine then visual.botLine.Visible = false end
+		if inLineSkelRange and showBot then
+			positionThinSegment(visual.botLine, botCenter, botPt, espColor, 1)
+		elseif visual.botLine then
+			visual.botLine.Visible = false
+		end
 
 		if inLineSkelRange and showSkel then
 			local torsoPart = model:FindFirstChild("UpperTorso") or model:FindFirstChild("Torso") or hrp
@@ -1823,8 +1884,12 @@ local function renderEspForModels(cam, originPos)
 			local lLeg = model:FindFirstChild("LeftLowerLeg") or model:FindFirstChild("Left Leg") or model:FindFirstChild("LeftUpperLeg")
 			local rLeg = model:FindFirstChild("RightLowerLeg") or model:FindFirstChild("Right Leg") or model:FindFirstChild("RightUpperLeg")
 
-			local headWorld = (head and head:IsA("BasePart") and isFiniteVector3(head.Position)) and head.Position or (anchorPart.Position + Vector3.new(0, 1.65, 0))
-			local neckWorld = (torsoPart and torsoPart:IsA("BasePart") and isFiniteVector3(torsoPart.Position)) and (torsoPart.Position + Vector3.new(0, torsoPart.Size.Y * 0.48, 0)) or headWorld:Lerp(anchorPart.Position, 0.35)
+			local headWorld = (head and head:IsA("BasePart") and isFiniteVector3(head.Position))
+				and head.Position
+				or (anchorPart.Position + Vector3.new(0, 1.65, 0))
+			local neckWorld = (torsoPart and torsoPart:IsA("BasePart") and isFiniteVector3(torsoPart.Position))
+				and (torsoPart.Position + Vector3.new(0, torsoPart.Size.Y * 0.48, 0))
+				or headWorld:Lerp(anchorPart.Position, 0.35)
 
 			local pHead = toScreen2D(cam, headWorld) or topPt
 			local pNeck = toScreen2D(cam, neckWorld) or pHead
@@ -1845,10 +1910,17 @@ local function renderEspForModels(cam, originPos)
 			end
 
 			local segs = {
-				{ pHead, pNeck }, { pNeck, pTorso }, { pTorso, pHip },
-				{ pNeck, pLArm }, { pNeck, pRArm }, { pHip, pLLeg },
-				{ pHip, pRLeg }, { pLLeg, botPt }, { pRLeg, botPt },
-				{ pLArm, pTorso }, { pRArm, pTorso }
+				{ pHead, pNeck },
+				{ pNeck, pTorso },
+				{ pTorso, pHip },
+				{ pNeck, pLArm },
+				{ pNeck, pRArm },
+				{ pHip, pLLeg },
+				{ pHip, pRLeg },
+				{ pLLeg, botPt },
+				{ pRLeg, botPt },
+				{ pLArm, pTorso },
+				{ pRArm, pTorso }
 			}
 			for bIdx, bone in ipairs(visual.bones) do
 				local pair = segs[bIdx]
@@ -1901,7 +1973,9 @@ local function updateRainbowUI()
 		if HButton then HButton.TextColor3 = COLOR_H_ORANGE_TEXT end
 		return
 	end
-	if mainStroke then mainStroke.Color = Color3.fromHSV((elapsedClock * 0.25) % 1, 1, 1) end
+	if mainStroke then
+		mainStroke.Color = Color3.fromHSV((elapsedClock * 0.25) % 1, 1, 1)
+	end
 end
 
 RunService.RenderStepped:Connect(function(dt)
@@ -1939,7 +2013,9 @@ RunService.RenderStepped:Connect(function(dt)
 			if CachedChestTarget and CachedChestTarget.Parent and isFiniteVector3(CachedChestTarget.Position) then
 				local chestVel = (activeLinePart == CachedChestTarget) and CachedTargetVelocity or estimateTargetVelocity(CachedChestTarget, safeDt, (CachedChestTarget.Position - originPos).Magnitude)
 				CachedChestAimPos = computePredictedPosition(originPos, CachedChestTarget, chestVel)
-				if usesChestAimbot() then applyChestAimbotWhenFiring(cam, CachedChestTarget, CachedChestAimPos, Config.AimbotStickiness) end
+				if usesChestAimbot() then
+					applyChestAimbotWhenFiring(cam, CachedChestTarget, CachedChestAimPos, Config.AimbotStickiness)
+				end
 			else
 				CachedChestAimPos = nil
 			end
@@ -1990,7 +2066,7 @@ end)
 local function aimDirection(origin, originalDirection, targetPos)
 	if not (isFiniteVector3(origin) and isFiniteVector3(targetPos)) then return originalDirection end
 	local toTarget = targetPos - origin
-	if not isFiniteVector3(toTarget) or toTarget.Magnitude <= 1e-4 then return originalDirection end
+	if not isFiniteVector3(toTarget) or toTarget.Magnitude <= 1e-5 then return originalDirection end
 	local mag = (isFiniteVector3(originalDirection) and originalDirection.Magnitude > 0) and originalDirection.Magnitude or toTarget.Magnitude
 	local dir = toTarget.Unit * mag
 	return isFiniteVector3(dir) and dir or originalDirection
@@ -2004,34 +2080,20 @@ local function logHookHit(tag)
 	end
 end
 
-local function isCallerInternal()
-	if type(checkcaller) == "function" then
-		local ok, res = pcall(checkcaller)
-		if ok and res == true then return true end
-	end
-	return false
-end
-
 local function safeHookMetamethod(target, metamethod, handler)
-	if type(getrawmetatable) == "function" and type(setreadonly) == "function" then
+	if hookmetamethod then
+		local ok, oldFn = pcall(hookmetamethod, target, metamethod, handler)
+		if ok and oldFn then return oldFn end
+	end
+	if getrawmetatable and setreadonly then
 		local ok, mt = pcall(getrawmetatable, target)
 		if ok and type(mt) == "table" and type(mt[metamethod]) == "function" then
 			local oldFn = mt[metamethod]
-			local unlocked = pcall(setreadonly, mt, false)
-			if unlocked then
-				local hooked = pcall(function()
-					mt[metamethod] = function(...)
-						return handler(...)
-					end
-				end)
-				pcall(setreadonly, mt, true)
-				if hooked then return oldFn end
-			end
+			pcall(setreadonly, mt, false)
+			mt[metamethod] = function(...) return handler(...) end
+			pcall(setreadonly, mt, true)
+			return oldFn
 		end
-	end
-	if type(hookmetamethod) == "function" then
-		local ok, oldFn = pcall(hookmetamethod, target, metamethod, handler)
-		if ok and oldFn then return oldFn end
 	end
 	return nil
 end
@@ -2047,13 +2109,15 @@ local function isSuspiciousClientRemote(inst)
 	end
 	local lowerName = string.lower(inst.Name or "")
 	for _, pat in ipairs(SUSPICIOUS_REMOTE_PATTERNS) do
-		if string.find(lowerName, pat, 1, true) then return true end
+		if string.find(lowerName, pat, 1, true) then
+			return true
+		end
 	end
 	return false
 end
 
 pcall(function()
-	if type(hookfunction) == "function" and LocalPlayer and type(LocalPlayer.Kick) == "function" then
+	if hookfunction and LocalPlayer and type(LocalPlayer.Kick) == "function" then
 		local oldKick
 		oldKick = hookfunction(LocalPlayer.Kick, function(self, ...)
 			if Config.AntiKickClient and self == LocalPlayer then
@@ -2066,11 +2130,11 @@ pcall(function()
 end)
 
 pcall(function()
-	if type(hookfunction) == "function" and TeleportService then
+	if hookfunction and TeleportService then
 		if type(TeleportService.Teleport) == "function" then
 			local oldTeleport
 			oldTeleport = hookfunction(TeleportService.Teleport, function(self, ...)
-				if Config.AntiKickClient and not isCallerInternal() then
+				if Config.AntiKickClient and not (checkcaller and checkcaller()) then
 					logHookHit("Blocked TeleportService:Teleport")
 					return nil
 				end
@@ -2080,7 +2144,7 @@ pcall(function()
 		if type(TeleportService.TeleportToPlaceInstance) == "function" then
 			local oldTpInst
 			oldTpInst = hookfunction(TeleportService.TeleportToPlaceInstance, function(self, ...)
-				if Config.AntiKickClient and not isCallerInternal() then
+				if Config.AntiKickClient and not (checkcaller and checkcaller()) then
 					logHookHit("Blocked TeleportToPlaceInstance")
 					return nil
 				end
@@ -2100,37 +2164,42 @@ pcall(function()
 end)
 
 pcall(function()
-	if type(getnamecallmethod) ~= "function" then return end
+	if not getnamecallmethod then
+		warn("[SilentAimGemini] Executor khong ho tro getnamecallmethod.")
+		return
+	end
 	local oldNamecall
 	oldNamecall = safeHookMetamethod(game, "__namecall", function(self, ...)
-		if not oldNamecall then return end
 		local okMethod, method = pcall(getnamecallmethod)
 		if okMethod then
-			local fromCaller = isCallerInternal()
 			if Config.AntiKickClient then
 				if method == "Kick" and self == LocalPlayer then
 					logHookHit("Blocked __namecall Kick")
 					return nil
 				end
-				if (method == "FireServer" or method == "InvokeServer") and isSuspiciousClientRemote(self) and not fromCaller then
-					logHookHit("Blocked suspicious remote: " .. tostring(self.Name))
-					return nil
+				if (method == "FireServer" or method == "InvokeServer") and isSuspiciousClientRemote(self) then
+					if not checkcaller or not checkcaller() then
+						logHookHit("Blocked suspicious remote: " .. tostring(self.Name))
+						return nil
+					end
 				end
 			end
 
-			if usesSilentAim() and self == Workspace and CachedTarget and CachedAimPos and not fromCaller then
+			if usesSilentAim() and self == Workspace and CachedTarget and CachedAimPos then
 				if method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
-					if method == "Raycast" then
-						local origin, direction, params = ...
-						if isFiniteVector3(origin) and isFiniteVector3(direction) then
-							logHookHit("Workspace:Raycast")
-							return oldNamecall(self, origin, aimDirection(origin, direction, CachedAimPos), params)
-						end
-					else
-						local ray, ignoreOrList, terrainCellsAreCsg, ignoreWater = ...
-						if typeof(ray) == "Ray" and isFiniteVector3(ray.Origin) and isFiniteVector3(ray.Direction) then
-							logHookHit("Workspace:" .. method)
-							return oldNamecall(self, Ray.new(ray.Origin, aimDirection(ray.Origin, ray.Direction, CachedAimPos)), ignoreOrList, terrainCellsAreCsg, ignoreWater)
+					if not checkcaller or not checkcaller() then
+						if method == "Raycast" then
+							local origin, direction, params = ...
+							if isFiniteVector3(origin) and isFiniteVector3(direction) then
+								logHookHit("Workspace:Raycast")
+								return oldNamecall(self, origin, aimDirection(origin, direction, CachedAimPos), params)
+							end
+						else
+							local ray, ignoreOrList, terrainCellsAreCsg, ignoreWater = ...
+							if typeof(ray) == "Ray" and isFiniteVector3(ray.Origin) and isFiniteVector3(ray.Direction) then
+								logHookHit("Workspace:" .. method)
+								return oldNamecall(self, Ray.new(ray.Origin, aimDirection(ray.Origin, ray.Direction, CachedAimPos)), ignoreOrList, terrainCellsAreCsg, ignoreWater)
+							end
 						end
 					end
 				end
@@ -2145,9 +2214,8 @@ pcall(function()
 	if Mouse then
 		local oldIndex
 		oldIndex = safeHookMetamethod(Mouse, "__index", function(self, key)
-			if not oldIndex then return nil end
 			if usesSilentAim() and self == Mouse and CachedTarget and CachedAimPos then
-				if (key == "Hit" or key == "Target" or key == "UnitRay") and not isCallerInternal() then
+				if (key == "Hit" or key == "Target" or key == "UnitRay") and (not checkcaller or not checkcaller()) then
 					if key == "Hit" then
 						logHookHit("Mouse.Hit")
 						return CFrame.new(CachedAimPos)
@@ -2159,7 +2227,7 @@ pcall(function()
 						if cam and isFiniteVector3(cam.CFrame.Position) then
 							local origin = cam.CFrame.Position
 							local delta = CachedAimPos - origin
-							if isFiniteVector3(delta) and delta.Magnitude > 1e-4 then
+							if isFiniteVector3(delta) and delta.Magnitude > 1e-5 then
 								logHookHit("Mouse.UnitRay")
 								return Ray.new(origin, delta.Unit)
 							end
