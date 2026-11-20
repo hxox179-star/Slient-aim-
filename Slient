@@ -1,13 +1,11 @@
 -- ============================================================================
--- SILENT AIM GEMINI - PHẦN 1/2 (CONFIG, SAVE/LOAD, ESP POOL, UI & INPUT)
+-- SILENT AIM GEMINI - REBUILT CLEAN VERSION (MOBILE READY)
 -- ============================================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
-local TeleportService = game:GetService("TeleportService")
-local GuiService = game:GetService("GuiService")
 
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
@@ -17,91 +15,27 @@ if not LocalPlayer then
 	until LocalPlayer
 end
 
-local AIM_ENGINE_MODES = { "Silent Aim", "Aimbot Ngực", "Silent + Aimbot Ngực" }
 local AIM_TARGET_MODES = { "Player + NPC", "Player", "NPC" }
 local TARGET_PART_MODES = { "Head", "HumanoidRootPart", "Random" }
 local HEADSHOT_CHANCE_PRESETS = { 25, 50, 75, 100 }
-local STICKINESS_PRESETS = { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 }
-local ESP_RANGE_PRESETS = { 50, 150, 250, 350, 500, 800, 1000 }
-local TABS = { "Silent Aim", "Aimbot", "ESP", "Settings" }
 
-local SAVE_FOLDER = "SilentAimGeminiSaves"
-local AUTO_LOAD_META_FILE = SAVE_FOLDER .. "/autoload_meta.json"
-local MemorySaves = {}
-local MemoryAutoLoadName = nil
-
-local function getDefaultConfig()
-	return {
-		Enabled = false,
-		ActiveTab = "Silent Aim",
-		AimEngineMode = "Silent Aim",
-		AutoSeatToggle = true,
-		AntiKickClient = true,
-		SafeAngleClamp = true,
-		MaxSafeAngleDeg = 18,
-		AimMode = "Player + NPC",
-		TeamCheck = false,
-		WallCheck = false,
-		AimbotWallCheck = false,
-		FOVRadius = 60,
-		ShowFOV = false,
-		AimbotFOVRadius = 60,
-		ShowAimbotFOV = false,
-		AimbotStickiness = 70,
-		ShowLine = false,
-		ShowTopLine = false,
-		ShowBottomLine = false,
-		ShowEspInfo = false,
-		ShowBox2D = false,
-		ShowHealthBar = false,
-		ShowSkeleton = false,
-		BoxMaxDistance = 350,
-		LineSkeletonMaxDistance = 350,
-		TargetPart = "Head",
-		HeadshotChance = 50,
-		MaxDistance = 0,
-		AutoSmartAim = false,
-		NoRecoil = false,
-		StraightBullet = false,
-		BulletSpeed = 650,
-		MaxLeadTime = 0.42,
-		SevenFingerGesture = true,
-		AutoLoadEnabled = false,
-		SaveName = "Default",
-		DebugLog = false
-	}
-end
-
-local Config = getDefaultConfig()
-
-local ScreenGui, EspOverlayFolder, FOVFrame, AimbotFOVFrame, FOVLabel, AimbotFOVLabel, TargetLineFrame, EspInfoLabel, MainFrame, TopBar, TabBar, HButton, HButtonStroke, SaveNameBox, SaveStatusLabel
-local PageFrames = {}
-local TabButtons = {}
-local ToggleSilentBtn, AimEngineBtn, AimbotStickBtn, AimbotWallBtn, ToggleAimbotFOVBtn, AutoSeatBtn, AntiKickBtn, SafeAngleBtn, AimModeBtn, ToggleFOVBtn, ToggleLineBtn, ToggleTopLineBtn, ToggleBottomLineBtn, ToggleEspInfoBtn, ToggleBox2DBtn, ToggleHealthBarBtn, ToggleSkeletonBtn, BoxRangeBtn, LineSkelRangeBtn, TargetPartBtn, HeadshotChanceBtn, MaxDistBtn, AutoSmartBtn, NoRecoilBtn, StraightBulletBtn, TeamCheckBtn, WallCheckBtn, SevenFingerBtn, SaveBtn, AutoLoadToggleBtn, DeleteSaveBtn, ResetBtn, DebugLogBtn, MinBtn
-local mainStroke
-
-local COLOR_CLEAR_GREEN = Color3.fromRGB(0, 255, 110)
-local COLOR_WALL_WHITE = Color3.fromRGB(245, 248, 255)
-local COLOR_HP_GREEN = Color3.fromRGB(0, 255, 110)
-local COLOR_HP_ORANGE = Color3.fromRGB(255, 155, 0)
-local COLOR_HP_RED = Color3.fromRGB(255, 45, 55)
-local COLOR_AIMBOT_RED = Color3.fromRGB(255, 45, 55)
-local COLOR_H_BLACK_BORDER = Color3.fromRGB(10, 10, 12)
-local COLOR_H_ORANGE_TEXT = Color3.fromRGB(255, 140, 0)
-local COLOR_BG_DARK = Color3.fromRGB(24, 25, 28)
-local COLOR_HEADER_DARK = Color3.fromRGB(32, 34, 38)
-local COLOR_ITEM_DARK = Color3.fromRGB(38, 40, 45)
-local COLOR_ACCENT_GREEN = Color3.fromRGB(124, 179, 66)
-
-local userDesiredEnabled = Config.Enabled
-local pausedByVehicle = false
-local isMenuHiddenByGesture = false
-local isMinimized = false
-local isFiringInputHeld = false
-local sevenFingerTriggeredThisTouch = false
-local activeTouches = {}
-local activeTouchCount = 0
-local elapsedClock = 0
+local Config = {
+	Enabled = false,
+	AimMode = "Player + NPC",
+	TargetPart = "Head",
+	HeadshotChance = 50,
+	MaxDistance = 0,
+	FOVRadius = 80,
+	ShowFOV = true,
+	ShowLine = true,
+	ShowEspInfo = true,
+	TeamCheck = false,
+	WallCheck = true,
+	AutoSmartAim = true,
+	StraightBullet = false,
+	BulletSpeed = 850,
+	MaxLeadTime = 0.25
+}
 
 local function isFiniteNumber(n)
 	return typeof(n) == "number" and n == n and n > -math.huge and n < math.huge
@@ -114,1405 +48,53 @@ local function isFiniteVector3(v)
 		and isFiniteNumber(v.Z)
 end
 
-local function isSilentActive()
-	return Config.Enabled and not pausedByVehicle
-end
-
-local function usesSilentAim()
-	return isSilentActive() and (Config.AimEngineMode == "Silent Aim" or Config.AimEngineMode == "Silent + Aimbot Ngực")
-end
-
-local function usesChestAimbot()
-	return isSilentActive() and (Config.AimEngineMode == "Aimbot Ngực" or Config.AimEngineMode == "Silent + Aimbot Ngực")
-end
-
 local function cyclePreset(list, currentVal, fallback)
-	local nextIdx = 1
 	for i, v in ipairs(list) do
 		if v == currentVal then
-			nextIdx = (i % #list) + 1
-			break
+			return list[(i % #list) + 1] or fallback
 		end
 	end
-	return list[nextIdx] or fallback
+	return list[1] or fallback
 end
 
-local function setSaveStatus(msg, isGood)
-	if SaveStatusLabel then
-		SaveStatusLabel.Text = tostring(msg)
-		SaveStatusLabel.TextColor3 = isGood and Color3.fromRGB(150, 240, 130) or Color3.fromRGB(255, 165, 95)
-	end
+local function shouldTargetPlayers()
+	return Config.AimMode == "Player" or Config.AimMode == "Player + NPC"
 end
 
-local function sanitizeSaveName(raw)
-	local trimmed = tostring(raw or ""):gsub("^%s+", ""):gsub("%s+$", "")
-	if trimmed == "" then
-		return "Default"
-	end
-	return trimmed:gsub("[^%w%-%_]", "_")
+local function shouldTargetNpcs()
+	return Config.AimMode == "NPC" or Config.AimMode == "Player + NPC"
 end
 
-local function hasFileApi()
-	return type(writefile) == "function" and type(readfile) == "function" and type(isfile) == "function"
-end
+-- Khóa ngắn part ngẫu nhiên theo model để không bị nhảy liên tục giữa đầu và thân
+local partLockCache = {}
+local partLockUntil = {}
+local elapsedClock = 0
 
-local function ensureSaveFolder()
-	if type(makefolder) == "function" and type(isfolder) == "function" then
-		pcall(function()
-			if not isfolder(SAVE_FOLDER) then
-				makefolder(SAVE_FOLDER)
-			end
-		end)
-	end
-end
-
-local function getSaveFilePath(cleanName)
-	return SAVE_FOLDER .. "/" .. cleanName .. ".lua"
-end
-
-local function serializeValue(val, depth)
-	depth = depth or 0
-	if depth > 6 then
-		return "nil"
-	end
-	local t = typeof(val)
-	if t == "boolean" or t == "number" then
-		return tostring(val)
-	elseif t == "string" then
-		return string.format("%q", val)
-	elseif t == "table" then
-		local parts = { "{" }
-		for k, v in pairs(val) do
-			if type(k) == "string" and typeof(v) ~= "function" and typeof(v) ~= "Instance" then
-				table.insert(parts, string.format("[%q]=%s,", k, serializeValue(v, depth + 1)))
-			end
-		end
-		table.insert(parts, "}")
-		return table.concat(parts)
-	end
-	return "nil"
-end
-
-local function applyConfigTable(tbl)
-	if type(tbl) ~= "table" then return end
-	local defaults = getDefaultConfig()
-	for k, defaultVal in pairs(defaults) do
-		if tbl[k] ~= nil and typeof(tbl[k]) == typeof(defaultVal) then
-			Config[k] = tbl[k]
-		end
-	end
-	userDesiredEnabled = Config.Enabled
-end
-
-local function saveConfigByName(rawName)
-	local cleanName = sanitizeSaveName(rawName)
-	Config.SaveName = cleanName
-	local snapshot = {}
-	for k, _ in pairs(getDefaultConfig()) do
-		snapshot[k] = Config[k]
-	end
-	MemorySaves[cleanName] = snapshot
-
-	local payload = "return " .. serializeValue(snapshot)
-	if hasFileApi() then
-		ensureSaveFolder()
-		local ok = pcall(writefile, getSaveFilePath(cleanName), payload)
-		if not ok then
-			setSaveStatus("Đã lưu tạm: " .. cleanName, false)
-			return
-		end
-	end
-	setSaveStatus("Đã lưu: " .. cleanName, true)
-end
-
-local function saveAutoLoadMeta(enabled, cleanName)
-	MemoryAutoLoadName = enabled and cleanName or nil
-	if hasFileApi() then
-		ensureSaveFolder()
-		pcall(writefile, AUTO_LOAD_META_FILE, "return " .. serializeValue({
-			enabled = enabled,
-			name = cleanName or "Default"
-		}))
-	end
-end
-
-local function loadAutoLoadMeta()
-	if hasFileApi() then
-		local exists = false
-		pcall(function() exists = isfile(AUTO_LOAD_META_FILE) end)
-		if exists then
-			local ok, raw = pcall(readfile, AUTO_LOAD_META_FILE)
-			if ok and type(raw) == "string" then
-				local fn = loadstring(raw)
-				if type(fn) == "function" then
-					local okRun, data = pcall(fn)
-					if okRun and type(data) == "table" then
-						return data.enabled == true, sanitizeSaveName(data.name)
-					end
-				end
-			end
-		end
-	end
-	return Config.AutoLoadEnabled == true, sanitizeSaveName(Config.SaveName)
-end
-
-local function loadConfigByName(rawName, silentMode)
-	local cleanName = sanitizeSaveName(rawName)
-	if hasFileApi() then
-		local path = getSaveFilePath(cleanName)
-		local exists = false
-		pcall(function() exists = isfile(path) end)
-		if exists then
-			local ok, raw = pcall(readfile, path)
-			if ok and type(raw) == "string" then
-				local fn = loadstring(raw)
-				if type(fn) == "function" then
-					local okRun, data = pcall(fn)
-					if okRun and type(data) == "table" then
-						applyConfigTable(data)
-						Config.SaveName = cleanName
-						if not silentMode then
-							setSaveStatus("Đã tải save: " .. cleanName, true)
-						end
-						return true
-					end
-				end
-			end
-		end
-	end
-
-	if MemorySaves[cleanName] then
-		applyConfigTable(MemorySaves[cleanName])
-		Config.SaveName = cleanName
-		if not silentMode then
-			setSaveStatus("Đã tải save: " .. cleanName, true)
-		end
-		return true
-	end
-
-	if not silentMode then
-		setSaveStatus("Không tìm thấy: " .. cleanName, false)
-	end
-	return false
-end
-
-local function deleteConfigByName(rawName)
-	local cleanName = sanitizeSaveName(rawName)
-	local deleted = false
-	if MemorySaves[cleanName] then
-		MemorySaves[cleanName] = nil
-		deleted = true
-	end
-	if hasFileApi() and type(delfile) == "function" then
-		local path = getSaveFilePath(cleanName)
-		local exists = false
-		pcall(function() exists = isfile(path) end)
-		if exists then
-			local ok = pcall(delfile, path)
-			if ok then deleted = true end
-		end
-	end
-	if deleted then
-		setSaveStatus("Đã xóa save: " .. cleanName, true)
-	else
-		setSaveStatus("Chưa có save tên: " .. cleanName, false)
-	end
-end
-
-local function getBoxRangeText() return "Tầm nhìn Box: " .. tostring(Config.BoxMaxDistance) end
-local function getLineSkelRangeText() return "Tầm Line + Skel: " .. tostring(Config.LineSkeletonMaxDistance) end
-local function getToggleBox2DText() return Config.ShowBox2D and "ESP Box 2D: BẬT" or "ESP Box 2D: TẮT" end
-local function getToggleHealthBarText() return Config.ShowHealthBar and "Máu dọc trái: BẬT" or "Máu dọc trái: TẮT" end
-local function getToggleTopLineText() return Config.ShowTopLine and "Line trên màn: BẬT" or "Line trên màn: TẮT" end
-local function getToggleBottomLineText() return Config.ShowBottomLine and "Line dưới màn: BẬT" or "Line dưới màn: TẮT" end
-local function getToggleLineText() return Config.ShowLine and "Line tâm: BẬT" or "Line tâm: TẮT" end
-local function getToggleSkeletonText() return Config.ShowSkeleton and "ESP Skeleton: BẬT" or "ESP Skeleton: TẮT" end
-local function getAimEngineText() return "Chế độ: " .. tostring(Config.AimEngineMode) end
-local function getAimbotStickText() return "Độ dính ngực: " .. tostring(Config.AimbotStickiness) .. "%" end
-local function getAimbotWallText() return Config.AimbotWallCheck and "WallCheck ngực: BẬT" or "WallCheck ngực: TẮT" end
-local function getToggleAimbotFOVText() return Config.ShowAimbotFOV and "FOV Aimbot đỏ: HIỆN" or "FOV Aimbot đỏ: ẨN" end
-local function getAutoSeatText() return Config.AutoSeatToggle and "Tự tắt khi lên xe: BẬT" or "Tự tắt khi lên xe: TẮT" end
-local function getAntiKickText() return Config.AntiKickClient and "Siêu Antiban/Kick: BẬT" or "Siêu Antiban/Kick: TẮT" end
-local function getSafeAngleText() return Config.SafeAngleClamp and ("Lách góc Server (" .. tostring(Config.MaxSafeAngleDeg) .. "°): BẬT") or "Lách góc Server: TẮT" end
-local function getAimModeText() return "Aim Mode: " .. tostring(Config.AimMode) end
-local function getTargetPartText() return "Mục tiêu: " .. tostring(Config.TargetPart) end
-local function getHeadshotChanceText() return "Tỷ lệ HS (Random): " .. tostring(Config.HeadshotChance) .. "%" end
-local function getMaxDistText()
-	if Config.MaxDistance <= 0 then return "Tầm bắn: Không giới hạn" end
-	return "Tầm bắn: " .. tostring(Config.MaxDistance)
-end
-local function getAutoSmartText() return Config.AutoSmartAim and "Siêu đoán hướng: BẬT" or "Siêu đoán hướng: TẮT" end
-local function getNoRecoilText() return Config.NoRecoil and "Không rung tâm: BẬT" or "Không rung tâm: TẮT" end
-local function getStraightBulletText() return Config.StraightBullet and "Đạn thẳng: BẬT" or "Đạn thẳng: TẮT" end
-local function getSevenFingerText() return Config.SevenFingerGesture and "7 ngón ẩn/mở: BẬT" or "7 ngón ẩn/mở: TẮT" end
-local function getAutoLoadText() return Config.AutoLoadEnabled and "Auto Load Save: BẬT" or "Auto Load Save: TẮT" end
-local function shouldTargetPlayers() return Config.AimMode == "Player" or Config.AimMode == "Player + NPC" end
-local function shouldTargetNpcs() return Config.AimMode == "NPC" or Config.AimMode == "Player + NPC" end
-
-local EspVisualPool = {}
-
-local function hideAllEspVisuals()
-	for _, entry in pairs(EspVisualPool) do
-		if entry.boxFrame then entry.boxFrame.Visible = false end
-		if entry.hpBg then entry.hpBg.Visible = false end
-		if entry.topLine then entry.topLine.Visible = false end
-		if entry.botLine then entry.botLine.Visible = false end
-		if entry.headDot then entry.headDot.Visible = false end
-		if entry.bones then
-			for _, bone in ipairs(entry.bones) do
-				bone.Visible = false
-			end
-		end
-	end
-end
-
-local function getOrCreateEspVisual(key)
-	local entry = EspVisualPool[key]
-	if entry then return entry end
-	if not EspOverlayFolder then return nil end
-
-	local boxFrame = Instance.new("Frame")
-	boxFrame.Name = "Box2D"
-	boxFrame.BackgroundTransparency = 1
-	boxFrame.BorderSizePixel = 0
-	boxFrame.Visible = false
-	boxFrame.Active = false
-	boxFrame.ZIndex = 2
-	boxFrame.Parent = EspOverlayFolder
-
-	local boxStroke = Instance.new("UIStroke")
-	boxStroke.Color = COLOR_CLEAR_GREEN
-	boxStroke.Thickness = 1.4
-	boxStroke.Parent = boxFrame
-
-	local hpBg = Instance.new("Frame")
-	hpBg.Name = "HpBarBg"
-	hpBg.BackgroundColor3 = Color3.fromRGB(15, 16, 20)
-	hpBg.BackgroundTransparency = 0.25
-	hpBg.BorderSizePixel = 0
-	hpBg.Visible = false
-	hpBg.Active = false
-	hpBg.ZIndex = 2
-	hpBg.Parent = EspOverlayFolder
-
-	local hpFill = Instance.new("Frame")
-	hpFill.Name = "HpBarFill"
-	hpFill.AnchorPoint = Vector2.new(0, 1)
-	hpFill.Position = UDim2.new(0, 0, 1, 0)
-	hpFill.Size = UDim2.new(1, 0, 1, 0)
-	hpFill.BackgroundColor3 = COLOR_HP_GREEN
-	hpFill.BorderSizePixel = 0
-	hpFill.Active = false
-	hpFill.ZIndex = 3
-	hpFill.Parent = hpBg
-
-	local headDot = Instance.new("Frame")
-	headDot.Name = "HeadFilledDot"
-	headDot.AnchorPoint = Vector2.new(0.5, 0.5)
-	headDot.Size = UDim2.new(0, 7, 0, 7)
-	headDot.BackgroundColor3 = COLOR_CLEAR_GREEN
-	headDot.BackgroundTransparency = 0
-	headDot.BorderSizePixel = 0
-	headDot.Visible = false
-	headDot.Active = false
-	headDot.ZIndex = 3
-	headDot.Parent = EspOverlayFolder
-
-	local headDotCorner = Instance.new("UICorner")
-	headDotCorner.CornerRadius = UDim.new(1, 0)
-	headDotCorner.Parent = headDot
-
-	local function makeThinLine(name)
-		local line = Instance.new("Frame")
-		line.Name = name
-		line.AnchorPoint = Vector2.new(0.5, 0.5)
-		line.BackgroundColor3 = COLOR_CLEAR_GREEN
-		line.BackgroundTransparency = 0.2
-		line.BorderSizePixel = 0
-		line.Visible = false
-		line.Active = false
-		line.ZIndex = 1
-		line.Parent = EspOverlayFolder
-		return line
-	end
-
-	local topLine = makeThinLine("TopLine")
-	local botLine = makeThinLine("BotLine")
-	local bones = {}
-	for i = 1, 11 do
-		bones[i] = makeThinLine("Bone" .. tostring(i))
-	end
-
-	entry = {
-		boxFrame = boxFrame,
-		boxStroke = boxStroke,
-		hpBg = hpBg,
-		hpFill = hpFill,
-		headDot = headDot,
-		topLine = topLine,
-		botLine = botLine,
-		bones = bones
-	}
-	EspVisualPool[key] = entry
-	return entry
-end
-
-local function positionThinSegment(frame, pA, pB, color, thickness)
-	if not frame then return end
-	if not pA or not pB or not isFiniteNumber(pA.X) or not isFiniteNumber(pA.Y) or not isFiniteNumber(pB.X) or not isFiniteNumber(pB.Y) then
-		frame.Visible = false
-		return
-	end
-	local delta = pB - pA
-	local dist = delta.Magnitude
-	if not isFiniteNumber(dist) or dist <= 1 then
-		frame.Visible = false
-		return
-	end
-	local mid = (pA + pB) * 0.5
-	local angle = math.deg(math.atan2(delta.Y, delta.X))
-	frame.Size = UDim2.new(0, dist, 0, thickness or 1)
-	frame.Position = UDim2.new(0, mid.X, 0, mid.Y)
-	frame.Rotation = angle
-	frame.BackgroundColor3 = color
-	frame.Visible = true
-end
-
-local function hideTargetLine()
-	if TargetLineFrame and TargetLineFrame.Visible then TargetLineFrame.Visible = false end
-	if EspInfoLabel and EspInfoLabel.Visible then EspInfoLabel.Visible = false end
-end
-
-local function updateFOVVisual()
-	local active = isSilentActive()
-	if FOVFrame then
-		FOVFrame.Size = UDim2.new(0, Config.FOVRadius * 2, 0, Config.FOVRadius * 2)
-		FOVFrame.Visible = active and Config.ShowFOV and usesSilentAim()
-	end
-	if FOVLabel then
-		FOVLabel.Text = "FOV Silent: " .. tostring(Config.FOVRadius)
-	end
-	if AimbotFOVFrame then
-		local clampedAimFOV = math.clamp(Config.AimbotFOVRadius, 10, 120)
-		Config.AimbotFOVRadius = clampedAimFOV
-		AimbotFOVFrame.Size = UDim2.new(0, clampedAimFOV * 2, 0, clampedAimFOV * 2)
-		AimbotFOVFrame.Visible = active and Config.ShowAimbotFOV and usesChestAimbot()
-	end
-	if AimbotFOVLabel then
-		AimbotFOVLabel.Text = "FOV Aimbot: " .. tostring(Config.AimbotFOVRadius)
-	end
-	if not active then
-		hideTargetLine()
-		hideAllEspVisuals()
-	end
-end
-
-local function refreshSilentToggleButton()
-	if not ToggleSilentBtn then return end
-	if pausedByVehicle and Config.Enabled then
-		ToggleSilentBtn.Text = "Silent Aim: TẠM TẮT (Xe)"
-		ToggleSilentBtn.BackgroundColor3 = Color3.fromRGB(165, 115, 25)
-	elseif Config.Enabled then
-		ToggleSilentBtn.Text = "Silent Aim: BẬT"
-		ToggleSilentBtn.BackgroundColor3 = Color3.fromRGB(56, 118, 29)
-	else
-		ToggleSilentBtn.Text = "Silent Aim: TẮT"
-		ToggleSilentBtn.BackgroundColor3 = COLOR_ITEM_DARK
-	end
-end
-
-local function syncAllUiTexts()
-	refreshSilentToggleButton()
-	if AimEngineBtn then AimEngineBtn.Text = getAimEngineText() end
-	if AimbotStickBtn then AimbotStickBtn.Text = getAimbotStickText() end
-	if AimbotWallBtn then AimbotWallBtn.Text = getAimbotWallText() end
-	if ToggleAimbotFOVBtn then ToggleAimbotFOVBtn.Text = getToggleAimbotFOVText() end
-	if AutoSeatBtn then AutoSeatBtn.Text = getAutoSeatText() end
-	if AntiKickBtn then
-		AntiKickBtn.Text = getAntiKickText()
-		AntiKickBtn.BackgroundColor3 = Config.AntiKickClient and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-	end
-	if SafeAngleBtn then
-		SafeAngleBtn.Text = getSafeAngleText()
-		SafeAngleBtn.BackgroundColor3 = Config.SafeAngleClamp and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-	end
-	if AimModeBtn then AimModeBtn.Text = getAimModeText() end
-	if ToggleFOVBtn then ToggleFOVBtn.Text = Config.ShowFOV and "FOV Silent: HIỆN" or "FOV Silent: ẨN" end
-	if ToggleTopLineBtn then ToggleTopLineBtn.Text = getToggleTopLineText() end
-	if ToggleBottomLineBtn then ToggleBottomLineBtn.Text = getToggleBottomLineText() end
-	if ToggleLineBtn then ToggleLineBtn.Text = getToggleLineText() end
-	if ToggleEspInfoBtn then ToggleEspInfoBtn.Text = Config.ShowEspInfo and "Tên & Khoảng cách ESP: BẬT" or "Tên & Khoảng cách ESP: TẮT" end
-	if ToggleBox2DBtn then ToggleBox2DBtn.Text = getToggleBox2DText() end
-	if ToggleHealthBarBtn then ToggleHealthBarBtn.Text = getToggleHealthBarText() end
-	if ToggleSkeletonBtn then ToggleSkeletonBtn.Text = getToggleSkeletonText() end
-	if BoxRangeBtn then BoxRangeBtn.Text = getBoxRangeText() end
-	if LineSkelRangeBtn then LineSkelRangeBtn.Text = getLineSkelRangeText() end
-	if TargetPartBtn then TargetPartBtn.Text = getTargetPartText() end
-	if HeadshotChanceBtn then HeadshotChanceBtn.Text = getHeadshotChanceText() end
-	if MaxDistBtn then MaxDistBtn.Text = getMaxDistText() end
-	if AutoSmartBtn then AutoSmartBtn.Text = getAutoSmartText() end
-	if NoRecoilBtn then NoRecoilBtn.Text = getNoRecoilText() end
-	if StraightBulletBtn then StraightBulletBtn.Text = getStraightBulletText() end
-	if TeamCheckBtn then TeamCheckBtn.Text = Config.TeamCheck and "Kiểm tra đồng đội: BẬT" or "Kiểm tra đồng đội: TẮT" end
-	if WallCheckBtn then WallCheckBtn.Text = Config.WallCheck and "WallCheck Silent: BẬT" or "WallCheck Silent: TẮT" end
-	if SevenFingerBtn then SevenFingerBtn.Text = getSevenFingerText() end
-	if AutoLoadToggleBtn then AutoLoadToggleBtn.Text = getAutoLoadText() end
-	if DebugLogBtn then DebugLogBtn.Text = Config.DebugLog and "Debug Log: BẬT" or "Debug Log: TẮT" end
-	if SaveNameBox then SaveNameBox.Text = tostring(Config.SaveName or "Default") end
-	updateFOVVisual()
-	if not Config.ShowLine then hideTargetLine() end
-end
-
-local function isLocalPlayerOnVehicleOrMovingPlatform()
-	if not Config.AutoSeatToggle then return false end
-	local char = LocalPlayer.Character
-	if not char then return false end
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-
-	if hum and ((hum.SeatPart and hum.SeatPart:IsA("BasePart")) or hum.Sit) then
-		return true
-	end
-	if hrp and hrp:IsA("BasePart") then
-		local rootAssembly = hrp:GetRootPart()
-		if rootAssembly and rootAssembly ~= hrp and rootAssembly:IsA("BasePart") then
-			local rootVel = rootAssembly.AssemblyLinearVelocity
-			if isFiniteVector3(rootVel) and rootVel.Magnitude > 4 then return true end
-		end
-		local hrpVel = hrp.AssemblyLinearVelocity
-		local moveMag = hum and hum.MoveDirection.Magnitude or 0
-		if isFiniteVector3(hrpVel) and moveMag < 0.08 and hrpVel.Magnitude > 5.5 then
-			return true
-		end
-	end
-	return false
-end
-
-local function syncVehicleAutoState()
-	local onMovingVehicleOrPlatform = isLocalPlayerOnVehicleOrMovingPlatform()
-	if onMovingVehicleOrPlatform ~= pausedByVehicle then
-		pausedByVehicle = onMovingVehicleOrPlatform
-		Config.Enabled = not pausedByVehicle and userDesiredEnabled
-		refreshSilentToggleButton()
-		updateFOVVisual()
-	end
-end
-
-local function isTargetOnVehicleOrMovingPlatform(model, part, hum)
-	if not model then return false end
-	if hum and (hum.Sit or (hum.SeatPart and hum.SeatPart:IsA("BasePart"))) then
-		return true
-	end
-	local hrp = model:FindFirstChild("HumanoidRootPart")
-	if hrp and hrp:IsA("BasePart") then
-		local vel = hrp.AssemblyLinearVelocity
-		if isFiniteVector3(vel) and hum and hum.MoveDirection.Magnitude < 0.05 and vel.Magnitude > 4 then
-			return true
-		end
-	end
-	if part and part:IsA("BasePart") then
-		local rootAssembly = part:GetRootPart()
-		if rootAssembly and rootAssembly ~= part and isFiniteVector3(rootAssembly.AssemblyLinearVelocity) then
-			if rootAssembly.AssemblyLinearVelocity.Magnitude > 5 then return true end
-		end
-	end
-	return false
-end
-
-local function updateTargetLineAndEsp(cam, startPos2D, worldPoint, isBlockedByWall, bypassWallCheck, modelName, distStuds)
-	if not isSilentActive() or not cam or not isFiniteVector3(worldPoint) then
-		hideTargetLine()
-		return
-	end
-	local screenPos, onScreen = cam:WorldToViewportPoint(worldPoint)
-	if not onScreen or not isFiniteNumber(screenPos.Z) or screenPos.Z <= 0 or not isFiniteNumber(screenPos.X) or not isFiniteNumber(screenPos.Y) then
-		hideTargetLine()
-		return
-	end
-	local endPos2D = Vector2.new(screenPos.X, screenPos.Y)
-	local delta = endPos2D - startPos2D
-	local length = delta.Magnitude
-	local lineColor = (bypassWallCheck or not isBlockedByWall) and COLOR_CLEAR_GREEN or COLOR_WALL_WHITE
-
-	if TargetLineFrame then
-		if Config.ShowLine and isFiniteNumber(length) and length > 1 then
-			TargetLineFrame.Size = UDim2.new(0, length, 0, 1)
-			TargetLineFrame.Position = UDim2.new(0, (startPos2D.X + endPos2D.X) * 0.5, 0, (startPos2D.Y + endPos2D.Y) * 0.5)
-			TargetLineFrame.Rotation = math.deg(math.atan2(delta.Y, delta.X))
-			TargetLineFrame.BackgroundColor3 = lineColor
-			TargetLineFrame.Visible = true
-		else
-			TargetLineFrame.Visible = false
-		end
-	end
-
-	if EspInfoLabel then
-		if Config.ShowEspInfo and modelName then
-			EspInfoLabel.Text = string.format("%s | %.0fm", tostring(modelName), tonumber(distStuds) or 0)
-			EspInfoLabel.TextColor3 = lineColor
-			EspInfoLabel.Position = UDim2.new(0, endPos2D.X, 0, endPos2D.Y - 18)
-			EspInfoLabel.Visible = true
-		else
-			EspInfoLabel.Visible = false
-		end
-	end
-end
-
--- Khóa ngắn part ngẫu nhiên theo model để không bị giật qua lại giữa đầu & thân gây trượt dame
-local silentPartLock = {}
-local silentPartLockExpiry = {}
-
-local function pickModelTargetPart(model)
+local function pickTargetPart(model, now)
 	if not model then return nil end
 	local head = model:FindFirstChild("Head")
 	local hrp = model:FindFirstChild("HumanoidRootPart")
+
 	if Config.TargetPart == "Random" then
 		local hasHead = head and head:IsA("BasePart")
 		local hasHrp = hrp and hrp:IsA("BasePart")
 		if hasHead and hasHrp then
-			local exp = silentPartLockExpiry[model] or 0
-			local locked = silentPartLock[model]
-			if locked and locked.Parent == model and elapsedClock < exp then
-				return locked
+			local cached = partLockCache[model]
+			local expire = partLockUntil[model] or 0
+			if cached and cached.Parent == model and now < expire then
+				return cached
 			end
 			local chance = math.clamp(tonumber(Config.HeadshotChance) or 50, 0, 100)
-			local chosenRandom = (math.random(1, 100) <= chance) and head or hrp
-			silentPartLock[model] = chosenRandom
-			silentPartLockExpiry[model] = elapsedClock + 0.35
-			return chosenRandom
+			local chosen = (math.random(1, 100) <= chance) and head or hrp
+			partLockCache[model] = chosen
+			partLockUntil[model] = now + 0.35
+			return chosen
 		end
 		return (hasHead and head) or (hasHrp and hrp) or nil
 	end
+
 	local chosen = model:FindFirstChild(Config.TargetPart) or hrp
 	return (chosen and chosen:IsA("BasePart")) and chosen or nil
-end
-
-local function pickChestPart(model)
-	if not model then return nil end
-	for _, name in ipairs({ "UpperTorso", "Torso", "HumanoidRootPart" }) do
-		local p = model:FindFirstChild(name)
-		if p and p:IsA("BasePart") then return p end
-	end
-	return nil
-end
-
-local function mountGui(gui)
-	local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 10)
-	if gethui then
-		local ok, hui = pcall(gethui)
-		if ok and hui and pcall(function() gui.Parent = hui end) then return true end
-	end
-	local okCore, core = pcall(function() return game:GetService("CoreGui") end)
-	if okCore and core and pcall(function() gui.Parent = core end) then return true end
-	if playerGui and pcall(function() gui.Parent = playerGui end) then return true end
-	return false
-end
-
-local MENU_WIDTH = 340
-local MENU_OPEN_HEIGHT = 248
-local MENU_MIN_HEIGHT = 32
-local H_SQUARE_SIZE = 42
-
-local function switchTab(tabName)
-	Config.ActiveTab = tabName
-	for name, page in pairs(PageFrames) do
-		if page then
-			page.Visible = (name == tabName)
-			if page.Visible then page.CanvasPosition = Vector2.new(0, 0) end
-		end
-	end
-	for name, btn in pairs(TabButtons) do
-		if btn then
-			local selected = (name == tabName)
-			btn.TextColor3 = selected and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(165, 170, 180)
-			btn.BackgroundColor3 = selected and Color3.fromRGB(48, 52, 58) or COLOR_HEADER_DARK
-		end
-	end
-end
-
-local function applyMenuVisibilityAndMinimize()
-	if not MainFrame then return end
-	if isMenuHiddenByGesture then
-		MainFrame.Visible = false
-		return
-	end
-	MainFrame.Visible = true
-	if isMinimized then
-		if TopBar then TopBar.Visible = false end
-		if TabBar then TabBar.Visible = false end
-		for _, page in pairs(PageFrames) do
-			if page then page.Visible = false end
-		end
-		if HButton then
-			HButton.Visible = true
-			HButton.TextColor3 = COLOR_H_ORANGE_TEXT
-		end
-		MainFrame.BackgroundTransparency = 1
-		MainFrame.Size = UDim2.new(0, H_SQUARE_SIZE, 0, H_SQUARE_SIZE)
-		if mainStroke then mainStroke.Enabled = false end
-		if HButtonStroke then
-			HButtonStroke.Color = COLOR_H_BLACK_BORDER
-			HButtonStroke.Thickness = 2.4
-		end
-	else
-		if HButton then HButton.Visible = false end
-		if TopBar then TopBar.Visible = true end
-		if TabBar then TabBar.Visible = true end
-		MainFrame.BackgroundTransparency = 0
-		MainFrame.Size = UDim2.new(0, MENU_WIDTH, 0, MENU_OPEN_HEIGHT)
-		if mainStroke then mainStroke.Enabled = true end
-		switchTab(Config.ActiveTab)
-	end
-end
-
-pcall(function()
-	ScreenGui = Instance.new("ScreenGui")
-	ScreenGui.Name = "SilentAimGeminiGUI"
-	ScreenGui.ResetOnSpawn = false
-	ScreenGui.IgnoreGuiInset = true
-	ScreenGui.DisplayOrder = 999999
-	ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-	EspOverlayFolder = Instance.new("Folder")
-	EspOverlayFolder.Name = "EspOverlayFolder"
-	EspOverlayFolder.Parent = ScreenGui
-
-	TargetLineFrame = Instance.new("Frame")
-	TargetLineFrame.Name = "TargetLine"
-	TargetLineFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	TargetLineFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	TargetLineFrame.Size = UDim2.new(0, 0, 0, 1)
-	TargetLineFrame.BackgroundColor3 = COLOR_CLEAR_GREEN
-	TargetLineFrame.BackgroundTransparency = 0.25
-	TargetLineFrame.BorderSizePixel = 0
-	TargetLineFrame.Visible = false
-	TargetLineFrame.Active = false
-	TargetLineFrame.ZIndex = 2
-	TargetLineFrame.Parent = ScreenGui
-
-	EspInfoLabel = Instance.new("TextLabel")
-	EspInfoLabel.Name = "EspTargetInfo"
-	EspInfoLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-	EspInfoLabel.Size = UDim2.new(0, 160, 0, 16)
-	EspInfoLabel.BackgroundTransparency = 1
-	EspInfoLabel.Text = ""
-	EspInfoLabel.TextColor3 = COLOR_CLEAR_GREEN
-	EspInfoLabel.Font = Enum.Font.GothamBold
-	EspInfoLabel.TextSize = 11
-	EspInfoLabel.Visible = false
-	EspInfoLabel.Active = false
-	EspInfoLabel.ZIndex = 3
-	EspInfoLabel.Parent = ScreenGui
-
-	FOVFrame = Instance.new("Frame")
-	FOVFrame.Name = "CenterFOV"
-	FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	FOVFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	FOVFrame.Size = UDim2.new(0, Config.FOVRadius * 2, 0, Config.FOVRadius * 2)
-	FOVFrame.BackgroundTransparency = 1
-	FOVFrame.Visible = false
-	FOVFrame.Active = false
-	FOVFrame.ZIndex = 1
-	FOVFrame.Parent = ScreenGui
-
-	local fovCorner = Instance.new("UICorner")
-	fovCorner.CornerRadius = UDim.new(1, 0)
-	fovCorner.Parent = FOVFrame
-
-	local fovStroke = Instance.new("UIStroke")
-	fovStroke.Color = Color3.fromRGB(0, 255, 190)
-	fovStroke.Thickness = 1.6
-	fovStroke.Parent = FOVFrame
-
-	AimbotFOVFrame = Instance.new("Frame")
-	AimbotFOVFrame.Name = "AimbotRedFOV"
-	AimbotFOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	AimbotFOVFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	AimbotFOVFrame.Size = UDim2.new(0, Config.AimbotFOVRadius * 2, 0, Config.AimbotFOVRadius * 2)
-	AimbotFOVFrame.BackgroundTransparency = 1
-	AimbotFOVFrame.Visible = false
-	AimbotFOVFrame.Active = false
-	AimbotFOVFrame.ZIndex = 2
-	AimbotFOVFrame.Parent = ScreenGui
-
-	local aimFovCorner = Instance.new("UICorner")
-	aimFovCorner.CornerRadius = UDim.new(1, 0)
-	aimFovCorner.Parent = AimbotFOVFrame
-
-	local aimFovStroke = Instance.new("UIStroke")
-	aimFovStroke.Color = COLOR_AIMBOT_RED
-	aimFovStroke.Thickness = 1.6
-	aimFovStroke.Parent = AimbotFOVFrame
-
-	MainFrame = Instance.new("Frame")
-	MainFrame.Name = "MainFrame"
-	MainFrame.Size = UDim2.new(0, MENU_WIDTH, 0, MENU_OPEN_HEIGHT)
-	MainFrame.Position = UDim2.new(0.06, 0, 0.18, 0)
-	MainFrame.BackgroundColor3 = COLOR_BG_DARK
-	MainFrame.BorderSizePixel = 0
-	MainFrame.ClipsDescendants = true
-	MainFrame.ZIndex = 10
-	MainFrame.Parent = ScreenGui
-
-	local mainCorner = Instance.new("UICorner")
-	mainCorner.CornerRadius = UDim.new(0, 6)
-	mainCorner.Parent = MainFrame
-
-	mainStroke = Instance.new("UIStroke")
-	mainStroke.Color = Color3.fromRGB(255, 0, 0)
-	mainStroke.Thickness = 1.8
-	mainStroke.Parent = MainFrame
-
-	TopBar = Instance.new("Frame")
-	TopBar.Name = "TopBar"
-	TopBar.Size = UDim2.new(1, 0, 0, MENU_MIN_HEIGHT)
-	TopBar.BackgroundColor3 = COLOR_HEADER_DARK
-	TopBar.BorderSizePixel = 0
-	TopBar.ZIndex = 11
-	TopBar.Parent = MainFrame
-
-	local statusDot = Instance.new("Frame")
-	statusDot.Size = UDim2.new(0, 8, 0, 8)
-	statusDot.Position = UDim2.new(0, 10, 0.5, -4)
-	statusDot.BackgroundColor3 = COLOR_ACCENT_GREEN
-	statusDot.BorderSizePixel = 0
-	statusDot.ZIndex = 12
-	statusDot.Parent = TopBar
-
-	local dotCorner = Instance.new("UICorner")
-	dotCorner.CornerRadius = UDim.new(1, 0)
-	dotCorner.Parent = statusDot
-
-	local Title = Instance.new("TextLabel")
-	Title.Size = UDim2.new(1, -66, 1, 0)
-	Title.Position = UDim2.new(0, 24, 0, 0)
-	Title.BackgroundTransparency = 1
-	Title.Text = "Silent Aim Gemini [Anti-Ban]"
-	Title.TextColor3 = Color3.fromRGB(235, 238, 242)
-	Title.Font = Enum.Font.GothamBold
-	Title.TextSize = 12
-	Title.TextXAlignment = Enum.TextXAlignment.Left
-	Title.ZIndex = 12
-	Title.Parent = TopBar
-
-	HButton = Instance.new("TextButton")
-	HButton.Name = "MinimizedHButton"
-	HButton.Size = UDim2.new(1, 0, 1, 0)
-	HButton.Position = UDim2.new(0, 0, 0, 0)
-	HButton.BackgroundColor3 = Color3.fromRGB(18, 20, 26)
-	HButton.Text = "H"
-	HButton.TextColor3 = COLOR_H_ORANGE_TEXT
-	HButton.Font = Enum.Font.GothamBlack
-	HButton.TextSize = 20
-	HButton.Visible = false
-	HButton.ZIndex = 12
-	HButton.Parent = MainFrame
-
-	local hCorner = Instance.new("UICorner")
-	hCorner.CornerRadius = UDim.new(0, 8)
-	hCorner.Parent = HButton
-
-	HButtonStroke = Instance.new("UIStroke")
-	HButtonStroke.Color = COLOR_H_BLACK_BORDER
-	HButtonStroke.Thickness = 2.4
-	HButtonStroke.Parent = HButton
-
-	local dragging = false
-	local movedWhileDrag = false
-	local dragStart, startPos
-
-	local function beginDrag(input)
-		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-			movedWhileDrag = false
-			dragStart = input.Position
-			startPos = MainFrame.Position
-		end
-	end
-
-	TopBar.InputBegan:Connect(beginDrag)
-	HButton.InputBegan:Connect(beginDrag)
-
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
-			local delta = input.Position - dragStart
-			if delta.Magnitude > 5 then movedWhileDrag = true end
-			MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-		end
-	end)
-
-	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = false
-		end
-	end)
-
-	MinBtn = Instance.new("TextButton")
-	MinBtn.Size = UDim2.new(0, 24, 0, 24)
-	MinBtn.Position = UDim2.new(1, -28, 0, 4)
-	MinBtn.BackgroundColor3 = COLOR_ITEM_DARK
-	MinBtn.Text = "-"
-	MinBtn.TextColor3 = Color3.fromRGB(235, 238, 242)
-	MinBtn.Font = Enum.Font.GothamBold
-	MinBtn.TextSize = 14
-	MinBtn.ZIndex = 12
-	MinBtn.Parent = TopBar
-
-	local minCorner = Instance.new("UICorner")
-	minCorner.CornerRadius = UDim.new(0, 4)
-	minCorner.Parent = MinBtn
-
-	TabBar = Instance.new("Frame")
-	TabBar.Name = "TabBar"
-	TabBar.Size = UDim2.new(1, 0, 0, 28)
-	TabBar.Position = UDim2.new(0, 0, 0, MENU_MIN_HEIGHT)
-	TabBar.BackgroundColor3 = COLOR_HEADER_DARK
-	TabBar.BorderSizePixel = 0
-	TabBar.ZIndex = 11
-	TabBar.Parent = MainFrame
-
-	local tabLayout = Instance.new("UIListLayout")
-	tabLayout.FillDirection = Enum.FillDirection.Horizontal
-	tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	tabLayout.Padding = UDim.new(0, 2)
-	tabLayout.Parent = TabBar
-
-	local tabPad = Instance.new("UIPadding")
-	tabPad.PaddingLeft = UDim.new(0, 4)
-	tabPad.PaddingRight = UDim.new(0, 4)
-	tabPad.PaddingTop = UDim.new(0, 2)
-	tabPad.PaddingBottom = UDim.new(0, 2)
-	tabPad.Parent = TabBar
-
-	local function createTabPage(tabName)
-		local page = Instance.new("ScrollingFrame")
-		page.Name = "Page_" .. tabName
-		page.Size = UDim2.new(1, -12, 1, -(MENU_MIN_HEIGHT + 34))
-		page.Position = UDim2.new(0, 6, 0, MENU_MIN_HEIGHT + 30)
-		page.BackgroundTransparency = 1
-		page.BorderSizePixel = 0
-		page.ScrollBarThickness = 4
-		page.ScrollBarImageColor3 = COLOR_ACCENT_GREEN
-		page.ScrollingDirection = Enum.ScrollingDirection.Y
-		page.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
-		page.CanvasSize = UDim2.new(0, 0, 0, 0)
-		page.Visible = false
-		page.ZIndex = 11
-		page.Parent = MainFrame
-
-		local list = Instance.new("UIListLayout")
-		list.Padding = UDim.new(0, 6)
-		list.SortOrder = Enum.SortOrder.LayoutOrder
-		list.Parent = page
-
-		local pad = Instance.new("UIPadding")
-		pad.PaddingRight = UDim.new(0, 4)
-		pad.PaddingBottom = UDim.new(0, 6)
-		pad.Parent = page
-
-		list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-			page.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 8)
-		end)
-
-		PageFrames[tabName] = page
-		return page
-	end
-
-	for idx, tabName in ipairs(TABS) do
-		local tBtn = Instance.new("TextButton")
-		tBtn.Size = UDim2.new(0.25, -2, 1, 0)
-		tBtn.BackgroundColor3 = COLOR_HEADER_DARK
-		tBtn.Text = tabName
-		tBtn.TextColor3 = Color3.fromRGB(165, 170, 180)
-		tBtn.Font = Enum.Font.GothamSemibold
-		tBtn.TextSize = 11
-		tBtn.LayoutOrder = idx
-		tBtn.ZIndex = 12
-		tBtn.Parent = TabBar
-
-		local tCorner = Instance.new("UICorner")
-		tCorner.CornerRadius = UDim.new(0, 4)
-		tCorner.Parent = tBtn
-
-		TabButtons[tabName] = tBtn
-		createTabPage(tabName)
-		tBtn.MouseButton1Click:Connect(function() switchTab(tabName) end)
-	end
-
-	local function createButton(parent, text, order)
-		local btn = Instance.new("TextButton")
-		btn.Size = UDim2.new(1, 0, 0, 30)
-		btn.BackgroundColor3 = COLOR_ITEM_DARK
-		btn.Text = text
-		btn.TextColor3 = Color3.fromRGB(235, 238, 242)
-		btn.Font = Enum.Font.GothamSemibold
-		btn.TextSize = 12
-		btn.LayoutOrder = order
-		btn.ZIndex = 12
-		btn.Parent = parent
-
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 5)
-		corner.Parent = btn
-
-		local stroke = Instance.new("UIStroke")
-		stroke.Color = Color3.fromRGB(55, 58, 65)
-		stroke.Thickness = 1
-		stroke.Parent = btn
-		return btn
-	end
-
-	local function createStepper(parent, labelText, minusText, plusText, textColor, order)
-		local frame = Instance.new("Frame")
-		frame.Size = UDim2.new(1, 0, 0, 30)
-		frame.BackgroundColor3 = COLOR_ITEM_DARK
-		frame.LayoutOrder = order
-		frame.ZIndex = 12
-		frame.Parent = parent
-
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 5)
-		corner.Parent = frame
-
-		local stroke = Instance.new("UIStroke")
-		stroke.Color = Color3.fromRGB(55, 58, 65)
-		stroke.Thickness = 1
-		stroke.Parent = frame
-
-		local minusBtn = Instance.new("TextButton")
-		minusBtn.Size = UDim2.new(0, 40, 1, 0)
-		minusBtn.BackgroundColor3 = Color3.fromRGB(48, 51, 58)
-		minusBtn.Text = minusText
-		minusBtn.TextColor3 = Color3.fromRGB(240, 242, 245)
-		minusBtn.Font = Enum.Font.GothamBold
-		minusBtn.TextSize = 11
-		minusBtn.ZIndex = 13
-		minusBtn.Parent = frame
-
-		local mCorner = Instance.new("UICorner")
-		mCorner.CornerRadius = UDim.new(0, 5)
-		mCorner.Parent = minusBtn
-
-		local lbl = Instance.new("TextLabel")
-		lbl.Size = UDim2.new(1, -80, 1, 0)
-		lbl.Position = UDim2.new(0, 40, 0, 0)
-		lbl.BackgroundTransparency = 1
-		lbl.Text = labelText
-		lbl.TextColor3 = textColor or Color3.fromRGB(235, 238, 242)
-		lbl.Font = Enum.Font.GothamSemibold
-		lbl.TextSize = 12
-		lbl.ZIndex = 13
-		lbl.Parent = frame
-
-		local plusBtn = Instance.new("TextButton")
-		plusBtn.Size = UDim2.new(0, 40, 1, 0)
-		plusBtn.Position = UDim2.new(1, -40, 0, 0)
-		plusBtn.BackgroundColor3 = Color3.fromRGB(48, 51, 58)
-		plusBtn.Text = plusText
-		plusBtn.TextColor3 = Color3.fromRGB(240, 242, 245)
-		plusBtn.Font = Enum.Font.GothamBold
-		plusBtn.TextSize = 11
-		plusBtn.ZIndex = 13
-		plusBtn.Parent = frame
-
-		local pCorner = Instance.new("UICorner")
-		pCorner.CornerRadius = UDim.new(0, 5)
-		pCorner.Parent = plusBtn
-		return lbl, minusBtn, plusBtn
-	end
-
-	-- TAB 1: SILENT AIM
-	local silentPage = PageFrames["Silent Aim"]
-	ToggleSilentBtn = createButton(silentPage, "Silent Aim: TẮT", 1)
-	AimModeBtn = createButton(silentPage, getAimModeText(), 2)
-	TargetPartBtn = createButton(silentPage, getTargetPartText(), 3)
-	HeadshotChanceBtn = createButton(silentPage, getHeadshotChanceText(), 4)
-	MaxDistBtn = createButton(silentPage, getMaxDistText(), 5)
-	AutoSmartBtn = createButton(silentPage, getAutoSmartText(), 6)
-	StraightBulletBtn = createButton(silentPage, getStraightBulletText(), 7)
-	NoRecoilBtn = createButton(silentPage, getNoRecoilText(), 8)
-	WallCheckBtn = createButton(silentPage, "WallCheck Silent: TẮT", 9)
-	ToggleFOVBtn = createButton(silentPage, "FOV Silent: ẨN", 10)
-	local FOVMinus, FOVPlus
-	FOVLabel, FOVMinus, FOVPlus = createStepper(silentPage, "FOV Silent: " .. tostring(Config.FOVRadius), "-15", "+15", Color3.fromRGB(160, 240, 220), 11)
-
-	-- TAB 2: AIMBOT
-	local aimbotPage = PageFrames["Aimbot"]
-	AimEngineBtn = createButton(aimbotPage, getAimEngineText(), 1)
-	AimbotStickBtn = createButton(aimbotPage, getAimbotStickText(), 2)
-	AimbotWallBtn = createButton(aimbotPage, getAimbotWallText(), 3)
-	ToggleAimbotFOVBtn = createButton(aimbotPage, getToggleAimbotFOVText(), 4)
-	local AimFOVMinus, AimFOVPlus
-	AimbotFOVLabel, AimFOVMinus, AimFOVPlus = createStepper(aimbotPage, "FOV Aimbot: " .. tostring(Config.AimbotFOVRadius), "-10", "+10", Color3.fromRGB(255, 115, 125), 5)
-
-	-- TAB 3: ESP
-	local espPage = PageFrames["ESP"]
-	ToggleBox2DBtn = createButton(espPage, getToggleBox2DText(), 1)
-	ToggleHealthBarBtn = createButton(espPage, getToggleHealthBarText(), 2)
-	ToggleTopLineBtn = createButton(espPage, getToggleTopLineText(), 3)
-	ToggleBottomLineBtn = createButton(espPage, getToggleBottomLineText(), 4)
-	ToggleLineBtn = createButton(espPage, getToggleLineText(), 5)
-	ToggleSkeletonBtn = createButton(espPage, getToggleSkeletonText(), 6)
-	BoxRangeBtn = createButton(espPage, getBoxRangeText(), 7)
-	LineSkelRangeBtn = createButton(espPage, getLineSkelRangeText(), 8)
-	ToggleEspInfoBtn = createButton(espPage, "Tên & Khoảng cách ESP: TẮT", 9)
-	TeamCheckBtn = createButton(espPage, "Kiểm tra đồng đội: TẮT", 10)
-
-	-- TAB 4: SETTINGS
-	local settingsPage = PageFrames["Settings"]
-	AntiKickBtn = createButton(settingsPage, getAntiKickText(), 1)
-	AntiKickBtn.BackgroundColor3 = Color3.fromRGB(56, 118, 29)
-	SafeAngleBtn = createButton(settingsPage, getSafeAngleText(), 2)
-	SafeAngleBtn.BackgroundColor3 = Color3.fromRGB(56, 118, 29)
-	AutoSeatBtn = createButton(settingsPage, getAutoSeatText(), 3)
-	AutoSeatBtn.BackgroundColor3 = Color3.fromRGB(56, 118, 29)
-	SevenFingerBtn = createButton(settingsPage, getSevenFingerText(), 4)
-	SevenFingerBtn.BackgroundColor3 = Color3.fromRGB(56, 118, 29)
-
-	local saveNameRow = Instance.new("Frame")
-	saveNameRow.Size = UDim2.new(1, 0, 0, 30)
-	saveNameRow.BackgroundColor3 = COLOR_ITEM_DARK
-	saveNameRow.LayoutOrder = 5
-	saveNameRow.ZIndex = 12
-	saveNameRow.Parent = settingsPage
-
-	local snCorner = Instance.new("UICorner")
-	snCorner.CornerRadius = UDim.new(0, 5)
-	snCorner.Parent = saveNameRow
-
-	local snStroke = Instance.new("UIStroke")
-	snStroke.Color = Color3.fromRGB(55, 58, 65)
-	snStroke.Thickness = 1
-	snStroke.Parent = saveNameRow
-
-	local snPrefix = Instance.new("TextLabel")
-	snPrefix.Size = UDim2.new(0, 74, 1, 0)
-	snPrefix.Position = UDim2.new(0, 8, 0, 0)
-	snPrefix.BackgroundTransparency = 1
-	snPrefix.Text = "Tên Save:"
-	snPrefix.TextColor3 = Color3.fromRGB(190, 195, 205)
-	snPrefix.Font = Enum.Font.GothamSemibold
-	snPrefix.TextSize = 11
-	snPrefix.TextXAlignment = Enum.TextXAlignment.Left
-	snPrefix.ZIndex = 13
-	snPrefix.Parent = saveNameRow
-
-	SaveNameBox = Instance.new("TextBox")
-	SaveNameBox.Size = UDim2.new(1, -88, 1, -6)
-	SaveNameBox.Position = UDim2.new(0, 82, 0, 3)
-	SaveNameBox.BackgroundColor3 = Color3.fromRGB(26, 28, 33)
-	SaveNameBox.Text = tostring(Config.SaveName or "Default")
-	SaveNameBox.PlaceholderText = "Nhập tên save..."
-	SaveNameBox.TextColor3 = Color3.fromRGB(245, 248, 255)
-	SaveNameBox.PlaceholderColor3 = Color3.fromRGB(125, 130, 140)
-	SaveNameBox.Font = Enum.Font.GothamSemibold
-	SaveNameBox.TextSize = 11
-	SaveNameBox.ClearTextOnFocus = false
-	SaveNameBox.ZIndex = 13
-	SaveNameBox.Parent = saveNameRow
-
-	local boxCorner = Instance.new("UICorner")
-	boxCorner.CornerRadius = UDim.new(0, 4)
-	boxCorner.Parent = SaveNameBox
-
-	SaveBtn = createButton(settingsPage, "Lưu Save theo tên", 6)
-	AutoLoadToggleBtn = createButton(settingsPage, getAutoLoadText(), 7)
-	DeleteSaveBtn = createButton(settingsPage, "Xóa Save theo tên", 8)
-	ResetBtn = createButton(settingsPage, "Reset về ban đầu", 9)
-	DebugLogBtn = createButton(settingsPage, "Debug Log: TẮT", 10)
-
-	SaveStatusLabel = Instance.new("TextLabel")
-	SaveStatusLabel.Size = UDim2.new(1, 0, 0, 20)
-	SaveStatusLabel.BackgroundTransparency = 1
-	SaveStatusLabel.Text = "Sẵn sàng"
-	SaveStatusLabel.TextColor3 = Color3.fromRGB(165, 170, 180)
-	SaveStatusLabel.Font = Enum.Font.Gotham
-	SaveStatusLabel.TextSize = 11
-	SaveStatusLabel.LayoutOrder = 11
-	SaveStatusLabel.ZIndex = 12
-	SaveStatusLabel.Parent = settingsPage
-
-	MinBtn.MouseButton1Click:Connect(function()
-		isMinimized = true
-		applyMenuVisibilityAndMinimize()
-	end)
-	HButton.MouseButton1Click:Connect(function()
-		if movedWhileDrag then
-			movedWhileDrag = false
-			return
-		end
-		isMinimized = false
-		applyMenuVisibilityAndMinimize()
-	end)
-	ToggleSilentBtn.MouseButton1Click:Connect(function()
-		userDesiredEnabled = not userDesiredEnabled
-		Config.Enabled = userDesiredEnabled and not pausedByVehicle
-		refreshSilentToggleButton()
-		updateFOVVisual()
-	end)
-	AimEngineBtn.MouseButton1Click:Connect(function()
-		Config.AimEngineMode = cyclePreset(AIM_ENGINE_MODES, Config.AimEngineMode, "Silent Aim")
-		AimEngineBtn.Text = getAimEngineText()
-		updateFOVVisual()
-	end)
-	AimbotStickBtn.MouseButton1Click:Connect(function()
-		Config.AimbotStickiness = cyclePreset(STICKINESS_PRESETS, Config.AimbotStickiness, 70)
-		AimbotStickBtn.Text = getAimbotStickText()
-	end)
-	AimbotWallBtn.MouseButton1Click:Connect(function()
-		Config.AimbotWallCheck = not Config.AimbotWallCheck
-		AimbotWallBtn.Text = getAimbotWallText()
-	end)
-	ToggleAimbotFOVBtn.MouseButton1Click:Connect(function()
-		Config.ShowAimbotFOV = not Config.ShowAimbotFOV
-		ToggleAimbotFOVBtn.Text = getToggleAimbotFOVText()
-		updateFOVVisual()
-	end)
-	ToggleBox2DBtn.MouseButton1Click:Connect(function()
-		Config.ShowBox2D = not Config.ShowBox2D
-		ToggleBox2DBtn.Text = getToggleBox2DText()
-	end)
-	ToggleHealthBarBtn.MouseButton1Click:Connect(function()
-		Config.ShowHealthBar = not Config.ShowHealthBar
-		ToggleHealthBarBtn.Text = getToggleHealthBarText()
-	end)
-	ToggleTopLineBtn.MouseButton1Click:Connect(function()
-		Config.ShowTopLine = not Config.ShowTopLine
-		syncAllUiTexts()
-	end)
-	ToggleBottomLineBtn.MouseButton1Click:Connect(function()
-		Config.ShowBottomLine = not Config.ShowBottomLine
-		syncAllUiTexts()
-	end)
-	ToggleLineBtn.MouseButton1Click:Connect(function()
-		Config.ShowLine = not Config.ShowLine
-		syncAllUiTexts()
-	end)
-	ToggleSkeletonBtn.MouseButton1Click:Connect(function()
-		Config.ShowSkeleton = not Config.ShowSkeleton
-		ToggleSkeletonBtn.Text = getToggleSkeletonText()
-	end)
-	BoxRangeBtn.MouseButton1Click:Connect(function()
-		Config.BoxMaxDistance = cyclePreset(ESP_RANGE_PRESETS, Config.BoxMaxDistance, 350)
-		BoxRangeBtn.Text = getBoxRangeText()
-	end)
-	LineSkelRangeBtn.MouseButton1Click:Connect(function()
-		Config.LineSkeletonMaxDistance = cyclePreset(ESP_RANGE_PRESETS, Config.LineSkeletonMaxDistance, 350)
-		LineSkelRangeBtn.Text = getLineSkelRangeText()
-	end)
-	AntiKickBtn.MouseButton1Click:Connect(function()
-		Config.AntiKickClient = not Config.AntiKickClient
-		AntiKickBtn.Text = getAntiKickText()
-		AntiKickBtn.BackgroundColor3 = Config.AntiKickClient and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-	end)
-	SafeAngleBtn.MouseButton1Click:Connect(function()
-		Config.SafeAngleClamp = not Config.SafeAngleClamp
-		SafeAngleBtn.Text = getSafeAngleText()
-		SafeAngleBtn.BackgroundColor3 = Config.SafeAngleClamp and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-	end)
-	AutoSeatBtn.MouseButton1Click:Connect(function()
-		Config.AutoSeatToggle = not Config.AutoSeatToggle
-		AutoSeatBtn.Text = getAutoSeatText()
-		AutoSeatBtn.BackgroundColor3 = Config.AutoSeatToggle and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-		syncVehicleAutoState()
-	end)
-	AimModeBtn.MouseButton1Click:Connect(function()
-		Config.AimMode = cyclePreset(AIM_TARGET_MODES, Config.AimMode, "Player + NPC")
-		AimModeBtn.Text = getAimModeText()
-	end)
-	ToggleFOVBtn.MouseButton1Click:Connect(function()
-		Config.ShowFOV = not Config.ShowFOV
-		ToggleFOVBtn.Text = Config.ShowFOV and "FOV Silent: HIỆN" or "FOV Silent: ẨN"
-		updateFOVVisual()
-	end)
-	ToggleEspInfoBtn.MouseButton1Click:Connect(function()
-		Config.ShowEspInfo = not Config.ShowEspInfo
-		ToggleEspInfoBtn.Text = Config.ShowEspInfo and "Tên & Khoảng cách ESP: BẬT" or "Tên & Khoảng cách ESP: TẮT"
-		if not Config.ShowEspInfo and EspInfoLabel then EspInfoLabel.Visible = false end
-	end)
-	TargetPartBtn.MouseButton1Click:Connect(function()
-		Config.TargetPart = cyclePreset(TARGET_PART_MODES, Config.TargetPart, "Head")
-		TargetPartBtn.Text = getTargetPartText()
-	end)
-	HeadshotChanceBtn.MouseButton1Click:Connect(function()
-		Config.HeadshotChance = cyclePreset(HEADSHOT_CHANCE_PRESETS, Config.HeadshotChance, 50)
-		HeadshotChanceBtn.Text = getHeadshotChanceText()
-	end)
-	MaxDistBtn.MouseButton1Click:Connect(function()
-		if Config.MaxDistance == 0 then Config.MaxDistance = 150
-		elseif Config.MaxDistance == 150 then Config.MaxDistance = 250
-		elseif Config.MaxDistance == 250 then Config.MaxDistance = 400
-		else Config.MaxDistance = 0 end
-		MaxDistBtn.Text = getMaxDistText()
-	end)
-	AutoSmartBtn.MouseButton1Click:Connect(function()
-		Config.AutoSmartAim = not Config.AutoSmartAim
-		AutoSmartBtn.Text = getAutoSmartText()
-	end)
-	NoRecoilBtn.MouseButton1Click:Connect(function()
-		Config.NoRecoil = not Config.NoRecoil
-		NoRecoilBtn.Text = getNoRecoilText()
-	end)
-	StraightBulletBtn.MouseButton1Click:Connect(function()
-		Config.StraightBullet = not Config.StraightBullet
-		StraightBulletBtn.Text = getStraightBulletText()
-	end)
-	TeamCheckBtn.MouseButton1Click:Connect(function()
-		Config.TeamCheck = not Config.TeamCheck
-		TeamCheckBtn.Text = Config.TeamCheck and "Kiểm tra đồng đội: BẬT" or "Kiểm tra đồng đội: TẮT"
-	end)
-	WallCheckBtn.MouseButton1Click:Connect(function()
-		Config.WallCheck = not Config.WallCheck
-		WallCheckBtn.Text = Config.WallCheck and "WallCheck Silent: BẬT" or "WallCheck Silent: TẮT"
-	end)
-	SevenFingerBtn.MouseButton1Click:Connect(function()
-		Config.SevenFingerGesture = not Config.SevenFingerGesture
-		SevenFingerBtn.Text = getSevenFingerText()
-		SevenFingerBtn.BackgroundColor3 = Config.SevenFingerGesture and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-	end)
-	SaveBtn.MouseButton1Click:Connect(function()
-		saveConfigByName(SaveNameBox and SaveNameBox.Text or Config.SaveName)
-		if Config.AutoLoadEnabled then
-			saveAutoLoadMeta(true, Config.SaveName)
-		end
-	end)
-	AutoLoadToggleBtn.MouseButton1Click:Connect(function()
-		Config.AutoLoadEnabled = not Config.AutoLoadEnabled
-		local cleanName = sanitizeSaveName(SaveNameBox and SaveNameBox.Text or Config.SaveName)
-		Config.SaveName = cleanName
-		saveAutoLoadMeta(Config.AutoLoadEnabled, cleanName)
-		AutoLoadToggleBtn.Text = getAutoLoadText()
-		setSaveStatus(Config.AutoLoadEnabled and ("Auto Load: " .. cleanName) or "Auto Load: TẮT", true)
-	end)
-	DeleteSaveBtn.MouseButton1Click:Connect(function()
-		deleteConfigByName(SaveNameBox and SaveNameBox.Text or Config.SaveName)
-	end)
-	ResetBtn.MouseButton1Click:Connect(function()
-		local keepSaveName = sanitizeSaveName(SaveNameBox and SaveNameBox.Text or Config.SaveName)
-		local keepAutoLoad = Config.AutoLoadEnabled
-		Config = getDefaultConfig()
-		Config.SaveName = keepSaveName
-		Config.AutoLoadEnabled = keepAutoLoad
-		userDesiredEnabled = Config.Enabled
-		pausedByVehicle = false
-		syncAllUiTexts()
-		AutoSeatBtn.BackgroundColor3 = Config.AutoSeatToggle and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-		AntiKickBtn.BackgroundColor3 = Config.AntiKickClient and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-		SafeAngleBtn.BackgroundColor3 = Config.SafeAngleClamp and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-		SevenFingerBtn.BackgroundColor3 = Config.SevenFingerGesture and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-		hideAllEspVisuals()
-		hideTargetLine()
-		setSaveStatus("Đã reset về mặc định", true)
-	end)
-	DebugLogBtn.MouseButton1Click:Connect(function()
-		Config.DebugLog = not Config.DebugLog
-		DebugLogBtn.Text = Config.DebugLog and "Debug Log: BẬT" or "Debug Log: TẮT"
-	end)
-	AimFOVMinus.MouseButton1Click:Connect(function()
-		Config.AimbotFOVRadius = math.max(10, Config.AimbotFOVRadius - 10)
-		updateFOVVisual()
-	end)
-	AimFOVPlus.MouseButton1Click:Connect(function()
-		Config.AimbotFOVRadius = math.min(120, Config.AimbotFOVRadius + 10)
-		updateFOVVisual()
-	end)
-	FOVMinus.MouseButton1Click:Connect(function()
-		Config.FOVRadius = math.max(30, Config.FOVRadius - 15)
-		updateFOVVisual()
-	end)
-	FOVPlus.MouseButton1Click:Connect(function()
-		Config.FOVRadius = math.min(450, Config.FOVRadius + 15)
-		updateFOVVisual()
-	end)
-
-	mountGui(ScreenGui)
-
-	local autoFlag, autoName = loadAutoLoadMeta()
-	if autoFlag then
-		Config.AutoLoadEnabled = true
-		loadConfigByName(autoName, true)
-		setSaveStatus("Auto Load: " .. Config.SaveName, true)
-	end
-
-	switchTab(Config.ActiveTab)
-	syncAllUiTexts()
-	AutoSeatBtn.BackgroundColor3 = Config.AutoSeatToggle and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-	AntiKickBtn.BackgroundColor3 = Config.AntiKickClient and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-	SafeAngleBtn.BackgroundColor3 = Config.SafeAngleClamp and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-	SevenFingerBtn.BackgroundColor3 = Config.SevenFingerGesture and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-end)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		isFiringInputHeld = true
-	elseif input.UserInputType == Enum.UserInputType.Touch then
-		if not activeTouches[input] then
-			activeTouches[input] = true
-			activeTouchCount = activeTouchCount + 1
-		end
-		if activeTouchCount >= 7 and not sevenFingerTriggeredThisTouch then
-			sevenFingerTriggeredThisTouch = true
-			if Config.SevenFingerGesture then
-				isMenuHiddenByGesture = not isMenuHiddenByGesture
-				applyMenuVisibilityAndMinimize()
-			end
-		end
-		if not gameProcessed then isFiringInputHeld = true end
-	end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		isFiringInputHeld = false
-	elseif input.UserInputType == Enum.UserInputType.Touch then
-		if activeTouches[input] then
-			activeTouches[input] = nil
-			activeTouchCount = math.max(0, activeTouchCount - 1)
-		end
-		if activeTouchCount < 7 then sevenFingerTriggeredThisTouch = false end
-		if activeTouchCount == 0 then isFiringInputHeld = false end
-	end
-end)
-
--- ============================================================================
--- SILENT AIM GEMINI - PHẦN 2/2 (CHỈ CHỈNH SILENT AIM, GIỮ NGUYÊN CÁC PHẦN KHÁC)
--- ============================================================================
-
-local CachedTarget = nil
-local CachedAimPos = nil
-local CachedChestTarget = nil
-local CachedChestAimPos = nil
-local CachedTargetVelocity = Vector3.zero
-local CachedDistance = 0
-local CachedIsWallBlocked = false
-local CachedBypassWall = false
-local lastLoggedTargetName = nil
-local lastHookLogTime = 0
-local lastNpcScanTime = 0
-local lastRainbowUpdateTime = 0
-local lastWallCheckTime = 0
-local lastSeatCheckTime = 0
-local lastEspRenderTime = 0
-local isScanningNpc = false
-
-local CachedNpcEntries = {}
-local PlayerCharacterSet = {}
-local prevTargetPart = nil
-local prevTargetPos = nil
-local prevTargetVel = nil
-local prevSampleTime = nil
-
-local SharedWallParams = RaycastParams.new()
-SharedWallParams.FilterType = Enum.RaycastFilterType.Exclude
-
-local function logDebug(msg)
-	if Config.DebugLog then
-		print("[SilentAimGemini] " .. tostring(msg))
-	end
-end
-
-local function isCurrentlyFiring()
-	return isFiringInputHeld == true
 end
 
 local function getOriginPosition(cam)
@@ -1529,732 +111,483 @@ local function getOriginPosition(cam)
 	return Vector3.zero
 end
 
-local function rebuildPlayerCharacterSet()
-	table.clear(PlayerCharacterSet)
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player.Character then
-			PlayerCharacterSet[player.Character] = true
-		end
+local function isEnemyPlayer(player)
+	if player == LocalPlayer then return false end
+	if Config.TeamCheck and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+		return false
 	end
+	local char = player.Character
+	if not char or not char.Parent or char == LocalPlayer.Character then
+		return false
+	end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	return hum ~= nil and hum.Health > 0
 end
 
-local function triggerAsyncNpcScan()
-	if isScanningNpc or not shouldTargetNpcs() then return end
-	isScanningNpc = true
-	task.spawn(function()
-		local newEntries = {}
-		local myChar = LocalPlayer.Character
-		pcall(function()
-			for _, obj in ipairs(Workspace:GetChildren()) do
-				if obj:IsA("Model") and obj ~= myChar and not PlayerCharacterSet[obj] then
-					local hum = obj:FindFirstChildOfClass("Humanoid")
-					if hum and hum.Health > 0 then
-						table.insert(newEntries, { model = obj, hum = hum })
-					end
-				end
-			end
-			if #newEntries == 0 then
-				for _, obj in ipairs(Workspace:GetDescendants()) do
-					if obj:IsA("Model") and obj ~= myChar and not PlayerCharacterSet[obj] then
-						local hum = obj:FindFirstChildOfClass("Humanoid")
-						if hum and hum.Health > 0 then
-							table.insert(newEntries, { model = obj, hum = hum })
-						end
-					end
-				end
-			end
-		end)
-		CachedNpcEntries = newEntries
-		isScanningNpc = false
+local wallParams = RaycastParams.new()
+wallParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function isBlockedByWall(cam, model, targetPos)
+	if not Config.WallCheck or not cam or not isFiniteVector3(targetPos) then
+		return false
+	end
+	local origin = cam.CFrame.Position
+	if not isFiniteVector3(origin) then return false end
+	local delta = targetPos - origin
+	if not isFiniteVector3(delta) or delta.Magnitude <= 0.05 then
+		return false
+	end
+	wallParams.FilterDescendantsInstances = { LocalPlayer.Character, model }
+	local ok, result = pcall(function()
+		return Workspace:Raycast(origin, delta, wallParams)
 	end)
+	return ok and result ~= nil
 end
 
--- [SILENT AIM FIX] Tính vận tốc theo thời gian thực để tránh đoán lệch khi FPS dao động ở tầm xa
-local function estimateTargetVelocity(part, dt, distance)
+local prevPart = nil
+local prevPos = nil
+local prevTime = nil
+local smoothedVel = Vector3.zero
+
+local function estimateVelocity(part, now)
 	if not part or not part:IsA("BasePart") or not isFiniteVector3(part.Position) then
+		prevPart = nil
+		prevPos = nil
+		prevTime = nil
+		smoothedVel = Vector3.zero
 		return Vector3.zero
 	end
-	local currentPos = part.Position
-	local assemblyVel = part.AssemblyLinearVelocity
-	if not isFiniteVector3(assemblyVel) then assemblyVel = Vector3.zero end
-	local estimatedVel = assemblyVel
 
-	local realDt = (prevSampleTime and (elapsedClock - prevSampleTime) > 0.001) and (elapsedClock - prevSampleTime) or dt
-	if prevTargetPart == part and prevTargetPos and realDt and realDt > 0.001 then
-		local frameVel = (currentPos - prevTargetPos) / realDt
-		if isFiniteVector3(frameVel) and frameVel.Magnitude < 240 then
-			local farFactor = Config.AutoSmartAim and math.clamp(((distance or 0) - 70) / 350, 0, 1) or 0
-			local blend = 0.68 - (farFactor * 0.18)
-			estimatedVel = (assemblyVel.Magnitude > frameVel.Magnitude * 0.5) and assemblyVel:Lerp(frameVel, blend) or frameVel
+	local pos = part.Position
+	local assemblyVel = isFiniteVector3(part.AssemblyLinearVelocity) and part.AssemblyLinearVelocity or Vector3.zero
+	local vel = assemblyVel
+
+	if prevPart == part and prevPos and prevTime and (now - prevTime) > 0.002 then
+		local dt = now - prevTime
+		local deltaVel = (pos - prevPos) / dt
+		if isFiniteVector3(deltaVel) and deltaVel.Magnitude < 200 then
+			vel = assemblyVel:Lerp(deltaVel, 0.55)
 		end
 	end
 
-	prevTargetPart = part
-	prevTargetPos = currentPos
-	prevTargetVel = estimatedVel
-	prevSampleTime = elapsedClock
-	return isFiniteVector3(estimatedVel) and estimatedVel or Vector3.zero
+	prevPart = part
+	prevPos = pos
+	prevTime = now
+	smoothedVel = isFiniteVector3(vel) and vel or Vector3.zero
+	return smoothedVel
 end
 
--- [SILENT AIM FIX] Cân bằng tầm gần (giảm văng/dame ảo) và tầm xa (tính lead theo quãng đường & dt thực)
-local function computePredictedPosition(origin, part, velocity)
+-- Đoán hướng cân bằng tầm gần (giữ sát mục tiêu để không bắn hụt/dame ảo) và tầm xa (tính lead mượt)
+local function computeAimPoint(origin, part, vel)
 	if not part or not isFiniteVector3(part.Position) then return nil end
 	local basePos = part.Position
 	if Config.StraightBullet or not Config.AutoSmartAim or not isFiniteVector3(origin) then
 		return basePos
 	end
+
 	local dist = (basePos - origin).Magnitude
-	local moveSpeed = isFiniteVector3(velocity) and velocity.Magnitude or 0
-	if moveSpeed < 1.3 then return basePos end
-
-	local nearScale = math.clamp((dist - 15) / 34, 0, 1)
-	if nearScale <= 0.02 then return basePos end
-
-	local farFactor = math.clamp((dist - 55) / 360, 0, 1)
-	local effectiveSpeed = math.max(200, Config.BulletSpeed * (1 - farFactor * 0.2))
-	local rawLead = dist / effectiveSpeed
-	local dynamicMaxLead = math.min(Config.MaxLeadTime, 0.14 + (farFactor * 0.2))
-	local leadTime = math.clamp(rawLead * nearScale, 0, dynamicMaxLead)
-
-	local realDt = (prevSampleTime and (elapsedClock - prevSampleTime) > 0.002) and (elapsedClock - prevSampleTime) or 0.016
-	local accelTerm = Vector3.zero
-	if prevTargetVel and isFiniteVector3(prevTargetVel) and realDt > 0.002 then
-		local accel = (velocity - prevTargetVel) / realDt
-		if isFiniteVector3(accel) and accel.Magnitude < 150 then
-			accelTerm = accel * (0.5 * leadTime * leadTime) * 0.3
-		end
+	local speed = isFiniteVector3(vel) and vel.Magnitude or 0
+	if speed < 1.5 then
+		return basePos
 	end
 
-	local predicted = basePos + (velocity * leadTime) + accelTerm
+	-- Trong phạm vi 18 studs: nhắm trực tiếp để ổn định sát thương tầm gần
+	if dist <= 18 then
+		return basePos
+	end
+
+	local nearFactor = math.clamp((dist - 18) / 40, 0, 1)
+	local farFactor = math.clamp((dist - 60) / 350, 0, 1)
+	local effectiveBulletSpeed = math.max(250, Config.BulletSpeed * (1 - farFactor * 0.15))
+	local leadTime = math.clamp((dist / effectiveBulletSpeed) * nearFactor, 0, Config.MaxLeadTime)
+
+	local predicted = basePos + (vel * leadTime)
 	return isFiniteVector3(predicted) and predicted or basePos
 end
 
-local function isWithinMaxDistance(origin, part)
-	if not part or not isFiniteVector3(part.Position) then return true end
-	local dist = (part.Position - origin).Magnitude
-	if Config.MaxDistance <= 0 then
-		if Config.AutoSmartAim then return dist <= 10000 end
-		return true
+local npcCache = {}
+local lastNpcScan = 0
+
+local function refreshNpcCache(now)
+	if now - lastNpcScan < 1.5 then return end
+	lastNpcScan = now
+
+	local playerChars = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Character then
+			playerChars[p.Character] = true
+		end
 	end
-	return dist <= Config.MaxDistance
-end
 
-local function isEnemyPlayer(player)
-	if player == LocalPlayer then return false end
-	if Config.TeamCheck and LocalPlayer.Team and player.Team == LocalPlayer.Team then return false end
-	local char = player.Character
-	if not char or not char.Parent or char == LocalPlayer.Character then return false end
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	return hum ~= nil and hum.Health > 0
-end
-
-local function checkWallOcclusion(model, targetPart, aimPos, hum)
-	local bypassWall = isTargetOnVehicleOrMovingPlatform(model, targetPart, hum)
-	if bypassWall then return false, true end
-
-	local cam = Workspace.CurrentCamera
-	if not cam or not isFiniteVector3(cam.CFrame.Position) then return false, false end
-
-	local origin = cam.CFrame.Position
-	local goalPos = (aimPos and isFiniteVector3(aimPos)) and aimPos or targetPart.Position
-	local direction = goalPos - origin
-	if not isFiniteVector3(direction) or direction.Magnitude <= 0.001 then return false, false end
-
-	SharedWallParams.FilterDescendantsInstances = { LocalPlayer.Character, model }
-	local ok, result = pcall(function()
-		return Workspace:Raycast(origin, direction, SharedWallParams)
-	end)
-	if not ok then return false, false end
-	return result ~= nil, false
-end
-
-local function isClearPathWithWallFlag(model, targetPart, aimPos, hum, wallFlag)
-	if not wallFlag then return true end
-	local isBlocked, bypassWall = checkWallOcclusion(model, targetPart, aimPos, hum)
-	if bypassWall then return true end
-	return not isBlocked
-end
-
-local function isWithinSafeServerAngle(cam, worldPos)
-	if not Config.SafeAngleClamp or not cam then return true end
-	local lookDir = cam.CFrame.LookVector
-	local toTarget = worldPos - cam.CFrame.Position
-	if toTarget.Magnitude <= 12 then return true end
-	local dot = math.clamp(lookDir.Unit:Dot(toTarget.Unit), -1, 1)
-	local angleDeg = math.deg(math.acos(dot))
-	return angleDeg <= Config.MaxSafeAngleDeg
-end
-
-local function evaluateCandidateModel(model, hum, cam, originPos, centerX, centerY, shortestDistance, partPicker, fovLimit, wallFlag)
-	local part = partPicker(model)
-	if not part or not part:IsA("BasePart") or not isFiniteVector3(part.Position) then
-		return nil, shortestDistance
+	local found = {}
+	local myChar = LocalPlayer.Character
+	for _, obj in ipairs(Workspace:GetDescendants()) do
+		if obj:IsA("Model") and obj ~= myChar and not playerChars[obj] then
+			local hum = obj:FindFirstChildOfClass("Humanoid")
+			local hrp = obj:FindFirstChild("HumanoidRootPart")
+			if hum and hum.Health > 0 and hrp and hrp:IsA("BasePart") then
+				table.insert(found, obj)
+			end
+		end
 	end
-	if not isWithinMaxDistance(originPos, part) then
-		return nil, shortestDistance
-	end
-	if not isWithinSafeServerAngle(cam, part.Position) then
-		return nil, shortestDistance
-	end
-	local screenPos, onScreen = cam:WorldToViewportPoint(part.Position)
-	if onScreen and isFiniteNumber(screenPos.Z) and screenPos.Z > 0 and isFiniteNumber(screenPos.X) and isFiniteNumber(screenPos.Y) then
+	npcCache = found
+end
+
+local function findBestSilentTarget(cam, originPos, centerX, centerY, now)
+	if not Config.Enabled or not cam then return nil, nil, 0, false end
+
+	local bestPart = nil
+	local bestAimPos = nil
+	local bestScreenDist = Config.FOVRadius
+	local bestWorldDist = 0
+	local bestBlocked = false
+
+	local function checkModel(model)
+		if not model or not model.Parent then return end
+		local hum = model:FindFirstChildOfClass("Humanoid")
+		if not hum or hum.Health <= 0 then return end
+
+		local part = pickTargetPart(model, now)
+		if not part or not isFiniteVector3(part.Position) then return end
+
+		local worldDist = (part.Position - originPos).Magnitude
+		if Config.MaxDistance > 0 and worldDist > Config.MaxDistance then
+			return
+		end
+
+		local screenPos, onScreen = cam:WorldToViewportPoint(part.Position)
+		if not onScreen or not isFiniteNumber(screenPos.Z) or screenPos.Z <= 0 then
+			return
+		end
+
 		local dx = screenPos.X - centerX
 		local dy = screenPos.Y - centerY
-		local dist = math.sqrt(dx * dx + dy * dy)
-		if dist <= math.min(shortestDistance, fovLimit) and isClearPathWithWallFlag(model, part, part.Position, hum, wallFlag) then
-			return part, dist
-		end
-	end
-	return nil, shortestDistance
-end
-
-local function findBestTarget(partPicker, fovLimit, wallFlag)
-	local cam = Workspace.CurrentCamera
-	if not cam then return nil end
-
-	local vp = cam.ViewportSize
-	local centerX = vp.X * 0.5
-	local centerY = vp.Y * 0.5
-	local originPos = getOriginPosition(cam)
-	local closestPart = nil
-	local shortestDistance = fovLimit
-
-	local checkPlayers = shouldTargetPlayers()
-	local checkNpcs = shouldTargetNpcs()
-
-	if checkPlayers or checkNpcs then rebuildPlayerCharacterSet() end
-
-	if checkPlayers then
-		for _, player in ipairs(Players:GetPlayers()) do
-			if isEnemyPlayer(player) then
-				local char = player.Character
-				local hum = char:FindFirstChildOfClass("Humanoid")
-				local pickedPart, newDist = evaluateCandidateModel(char, hum, cam, originPos, centerX, centerY, shortestDistance, partPicker, fovLimit, wallFlag)
-				if pickedPart then
-					closestPart = pickedPart
-					shortestDistance = newDist
-				end
-			end
-		end
-	end
-
-	if checkNpcs then
-		if elapsedClock - lastNpcScanTime >= 1.2 then
-			lastNpcScanTime = elapsedClock
-			triggerAsyncNpcScan()
-		end
-		for i = #CachedNpcEntries, 1, -1 do
-			local entry = CachedNpcEntries[i]
-			local npcModel = entry.model
-			local hum = entry.hum
-			if npcModel and npcModel.Parent and not PlayerCharacterSet[npcModel] and npcModel ~= LocalPlayer.Character and hum and hum.Parent and hum.Health > 0 then
-				local pickedPart, newDist = evaluateCandidateModel(npcModel, hum, cam, originPos, centerX, centerY, shortestDistance, partPicker, fovLimit, wallFlag)
-				if pickedPart then
-					closestPart = pickedPart
-					shortestDistance = newDist
-				end
-			else
-				table.remove(CachedNpcEntries, i)
-			end
-		end
-	end
-
-	return closestPart
-end
-
-local function applyChestAimbotWhenFiring(cam, targetPart, aimPos, stickPercent)
-	if not cam or not targetPart or not aimPos or not isFiniteVector3(aimPos) then return end
-	if not isCurrentlyFiring() then return end
-
-	local cf = cam.CFrame
-	if not isFiniteVector3(cf.Position) then return end
-
-	local desiredLook = aimPos - cf.Position
-	if not isFiniteVector3(desiredLook) or desiredLook.Magnitude <= 1e-4 then return end
-
-	local targetCFrame = CFrame.lookAt(cf.Position, cf.Position + desiredLook.Unit)
-	local clampedStick = math.clamp(tonumber(stickPercent) or 70, 10, 100)
-
-	if clampedStick >= 100 then
-		cam.CFrame = targetCFrame
-	else
-		local alpha = math.clamp((clampedStick / 100) * 0.65, 0.06, 0.65)
-		cam.CFrame = cf:Lerp(targetCFrame, alpha)
-	end
-end
-
-local function toScreen2D(cam, worldPos)
-	if not cam or not isFiniteVector3(worldPos) then return nil end
-	local sp, onScreen = cam:WorldToViewportPoint(worldPos)
-	if not onScreen or not isFiniteNumber(sp.Z) or sp.Z <= 0 or not isFiniteNumber(sp.X) or not isFiniteNumber(sp.Y) then
-		return nil
-	end
-	return Vector2.new(sp.X, sp.Y)
-end
-
-local function getHealthColor(hpRatio)
-	if hpRatio > 0.6 then return COLOR_HP_GREEN
-	elseif hpRatio >= 0.3 then return COLOR_HP_ORANGE
-	else return COLOR_HP_RED end
-end
-
-local function renderEspForModels(cam, originPos)
-	if not isSilentActive() or not cam then
-		hideAllEspVisuals()
-		return
-	end
-	local showBox = Config.ShowBox2D
-	local showHp = Config.ShowHealthBar and showBox
-	local showTop = Config.ShowTopLine
-	local showBot = Config.ShowBottomLine
-	local showSkel = Config.ShowSkeleton
-	if not showBox and not showTop and not showBot and not showSkel then
-		hideAllEspVisuals()
-		return
-	end
-
-	local vp = cam.ViewportSize
-	local topCenter = Vector2.new(vp.X * 0.5, 2)
-	local botCenter = Vector2.new(vp.X * 0.5, vp.Y - 2)
-	local activeKeys = {}
-	local idx = 0
-
-	local function processModel(model, hum)
-		if not model or not model.Parent or not hum or hum.Health <= 0 then return end
-		local hrp = model:FindFirstChild("HumanoidRootPart")
-		local head = model:FindFirstChild("Head")
-		local anchorPart = (hrp and hrp:IsA("BasePart") and hrp) or (head and head:IsA("BasePart") and head)
-		if not anchorPart or not isFiniteVector3(anchorPart.Position) then return end
-
-		local dist = (anchorPart.Position - originPos).Magnitude
-		local inBoxRange = showBox and (dist <= Config.BoxMaxDistance)
-		local inLineSkelRange = (showTop or showBot or showSkel) and (dist <= Config.LineSkeletonMaxDistance)
-		if not inBoxRange and not inLineSkelRange then return end
-
-		local headTopWorld = (head and head:IsA("BasePart") and isFiniteVector3(head.Position))
-			and (head.Position + Vector3.new(0, 0.72, 0))
-			or (anchorPart.Position + Vector3.new(0, 2.35, 0))
-		local footWorld = anchorPart.Position - Vector3.new(0, 3.1, 0)
-
-		local topPt = toScreen2D(cam, headTopWorld)
-		local botPt = toScreen2D(cam, footWorld)
-		local centerPt = toScreen2D(cam, anchorPart.Position)
-		if not topPt or not botPt or not centerPt then return end
-
-		local boxHeight = math.max(14, math.abs(botPt.Y - topPt.Y))
-		local boxWidth = math.max(10, boxHeight * 0.56)
-		local boxLeft = centerPt.X - (boxWidth * 0.5)
-		local boxTop = topPt.Y
-
-		local isBlocked, bypassWall = checkWallOcclusion(model, anchorPart, anchorPart.Position, hum)
-		local espColor = (bypassWall or not isBlocked) and COLOR_CLEAR_GREEN or COLOR_WALL_WHITE
-
-		idx = idx + 1
-		local key = tostring(idx)
-		activeKeys[key] = true
-		local visual = getOrCreateEspVisual(key)
-		if not visual then return end
-
-		if visual.boxFrame then
-			if inBoxRange then
-				visual.boxFrame.Position = UDim2.new(0, boxLeft, 0, boxTop)
-				visual.boxFrame.Size = UDim2.new(0, boxWidth, 0, boxHeight)
-				if visual.boxStroke then visual.boxStroke.Color = espColor end
-				visual.boxFrame.Visible = true
-			else
-				visual.boxFrame.Visible = false
-			end
+		local screenDist = math.sqrt(dx * dx + dy * dy)
+		if screenDist > bestScreenDist then
+			return
 		end
 
-		if visual.hpBg then
-			if inBoxRange and showHp then
-				local maxHp = math.max(1, tonumber(hum.MaxHealth) or 100)
-				local ratio = math.clamp((tonumber(hum.Health) or 0) / maxHp, 0, 1)
-				visual.hpBg.Position = UDim2.new(0, boxLeft - 6, 0, boxTop)
-				visual.hpBg.Size = UDim2.new(0, 4, 0, boxHeight)
-				visual.hpBg.Visible = true
-				if visual.hpFill then
-					visual.hpFill.Size = UDim2.new(1, 0, ratio, 0)
-					visual.hpFill.BackgroundColor3 = getHealthColor(ratio)
-				end
-			else
-				visual.hpBg.Visible = false
-			end
+		local vel = estimateVelocity(part, now)
+		local aimPos = computeAimPoint(originPos, part, vel) or part.Position
+		local blocked = isBlockedByWall(cam, model, aimPos)
+		if Config.WallCheck and blocked then
+			return
 		end
 
-		if inLineSkelRange and showTop then
-			positionThinSegment(visual.topLine, topCenter, topPt, espColor, 1)
-		elseif visual.topLine then
-			visual.topLine.Visible = false
-		end
-
-		if inLineSkelRange and showBot then
-			positionThinSegment(visual.botLine, botCenter, botPt, espColor, 1)
-		elseif visual.botLine then
-			visual.botLine.Visible = false
-		end
-
-		if inLineSkelRange and showSkel then
-			local torsoPart = model:FindFirstChild("UpperTorso") or model:FindFirstChild("Torso") or hrp
-			local hipPart = model:FindFirstChild("LowerTorso") or hrp
-			local lArm = model:FindFirstChild("LeftLowerArm") or model:FindFirstChild("Left Arm") or model:FindFirstChild("LeftUpperArm")
-			local rArm = model:FindFirstChild("RightLowerArm") or model:FindFirstChild("Right Arm") or model:FindFirstChild("RightUpperArm")
-			local lLeg = model:FindFirstChild("LeftLowerLeg") or model:FindFirstChild("Left Leg") or model:FindFirstChild("LeftUpperLeg")
-			local rLeg = model:FindFirstChild("RightLowerLeg") or model:FindFirstChild("Right Leg") or model:FindFirstChild("RightUpperLeg")
-
-			local headWorld = (head and head:IsA("BasePart") and isFiniteVector3(head.Position))
-				and head.Position
-				or (anchorPart.Position + Vector3.new(0, 1.65, 0))
-			local neckWorld = (torsoPart and torsoPart:IsA("BasePart") and isFiniteVector3(torsoPart.Position))
-				and (torsoPart.Position + Vector3.new(0, torsoPart.Size.Y * 0.48, 0))
-				or headWorld:Lerp(anchorPart.Position, 0.35)
-
-			local pHead = toScreen2D(cam, headWorld) or topPt
-			local pNeck = toScreen2D(cam, neckWorld) or pHead
-			local pTorso = torsoPart and torsoPart:IsA("BasePart") and toScreen2D(cam, torsoPart.Position) or centerPt
-			local pHip = hipPart and hipPart:IsA("BasePart") and toScreen2D(cam, hipPart.Position) or botPt
-			local pLArm = lArm and lArm:IsA("BasePart") and toScreen2D(cam, lArm.Position) or pNeck
-			local pRArm = rArm and rArm:IsA("BasePart") and toScreen2D(cam, rArm.Position) or pNeck
-			local pLLeg = lLeg and lLeg:IsA("BasePart") and toScreen2D(cam, lLeg.Position) or botPt
-			local pRLeg = rLeg and rLeg:IsA("BasePart") and toScreen2D(cam, rLeg.Position) or botPt
-
-			if visual.headDot then
-				local dotSize = math.clamp(math.floor(boxHeight * 0.16), 5, 16)
-				visual.headDot.Size = UDim2.new(0, dotSize, 0, dotSize)
-				visual.headDot.Position = UDim2.new(0, pHead.X, 0, pHead.Y)
-				visual.headDot.BackgroundColor3 = espColor
-				visual.headDot.BackgroundTransparency = 0
-				visual.headDot.Visible = true
-			end
-
-			local segs = {
-				{ pHead, pNeck },
-				{ pNeck, pTorso },
-				{ pTorso, pHip },
-				{ pNeck, pLArm },
-				{ pNeck, pRArm },
-				{ pHip, pLLeg },
-				{ pHip, pRLeg },
-				{ pLLeg, botPt },
-				{ pRLeg, botPt },
-				{ pLArm, pTorso },
-				{ pRArm, pTorso }
-			}
-			for bIdx, bone in ipairs(visual.bones) do
-				local pair = segs[bIdx]
-				if pair then positionThinSegment(bone, pair[1], pair[2], espColor, 1)
-				else bone.Visible = false end
-			end
-		else
-			if visual.headDot then visual.headDot.Visible = false end
-			for _, bone in ipairs(visual.bones) do bone.Visible = false end
-		end
+		bestScreenDist = screenDist
+		bestPart = part
+		bestAimPos = aimPos
+		bestWorldDist = worldDist
+		bestBlocked = blocked
 	end
 
 	if shouldTargetPlayers() then
 		for _, player in ipairs(Players:GetPlayers()) do
-			if isEnemyPlayer(player) and idx < 28 then
-				local char = player.Character
-				processModel(char, char and char:FindFirstChildOfClass("Humanoid"))
+			if isEnemyPlayer(player) then
+				checkModel(player.Character)
 			end
 		end
 	end
 
 	if shouldTargetNpcs() then
-		for _, entry in ipairs(CachedNpcEntries) do
-			if idx >= 28 then break end
-			if entry and entry.model and entry.model.Parent and not PlayerCharacterSet[entry.model] and entry.model ~= LocalPlayer.Character then
-				processModel(entry.model, entry.hum)
+		refreshNpcCache(now)
+		for i = #npcCache, 1, -1 do
+			local npc = npcCache[i]
+			if npc and npc.Parent then
+				checkModel(npc)
+			else
+				table.remove(npcCache, i)
 			end
 		end
 	end
 
-	for key, entry in pairs(EspVisualPool) do
-		if not activeKeys[key] then
-			if entry.boxFrame then entry.boxFrame.Visible = false end
-			if entry.hpBg then entry.hpBg.Visible = false end
-			if entry.topLine then entry.topLine.Visible = false end
-			if entry.botLine then entry.botLine.Visible = false end
-			if entry.headDot then entry.headDot.Visible = false end
-			if entry.bones then
-				for _, bone in ipairs(entry.bones) do bone.Visible = false end
-			end
-		end
-	end
+	return bestPart, bestAimPos, bestWorldDist, bestBlocked
 end
 
-local function updateRainbowUI()
-	if elapsedClock - lastRainbowUpdateTime < 0.03 then return end
-	lastRainbowUpdateTime = elapsedClock
-	if isMinimized then
-		if HButtonStroke then HButtonStroke.Color = COLOR_H_BLACK_BORDER end
-		if HButton then HButton.TextColor3 = COLOR_H_ORANGE_TEXT end
-		return
-	end
-	if mainStroke then
-		mainStroke.Color = Color3.fromHSV((elapsedClock * 0.25) % 1, 1, 1)
-	end
+-- ============================================================================
+-- GIAO DIỆN ĐIỀU KHIỂN (GẮN VÀO PLAYERGUI ĐỂ LUÔN HIỆN TRÊN ĐIỆN THOẠI)
+-- ============================================================================
+
+local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+local oldGui = playerGui:FindFirstChild("SilentAimGeminiMobileUI")
+if oldGui then
+	oldGui:Destroy()
 end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SilentAimGeminiMobileUI"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.DisplayOrder = 10000
+screenGui.Parent = playerGui
+
+local fovCircle = Instance.new("Frame")
+fovCircle.Name = "FOVCircle"
+fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+fovCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
+fovCircle.Size = UDim2.new(0, Config.FOVRadius * 2, 0, Config.FOVRadius * 2)
+fovCircle.BackgroundTransparency = 1
+fovCircle.Visible = false
+fovCircle.Parent = screenGui
+
+local fovCorner = Instance.new("UICorner")
+fovCorner.CornerRadius = UDim.new(1, 0)
+fovCorner.Parent = fovCircle
+
+local fovStroke = Instance.new("UIStroke")
+fovStroke.Color = Color3.fromRGB(0, 255, 140)
+fovStroke.Thickness = 1.6
+fovStroke.Parent = fovCircle
+
+local lineFrame = Instance.new("Frame")
+lineFrame.Name = "AimLine"
+lineFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+lineFrame.Size = UDim2.new(0, 0, 0, 2)
+lineFrame.BackgroundColor3 = Color3.fromRGB(0, 255, 140)
+lineFrame.BorderSizePixel = 0
+lineFrame.Visible = false
+lineFrame.Parent = screenGui
+
+local infoTag = Instance.new("TextLabel")
+infoTag.Name = "TargetTag"
+infoTag.AnchorPoint = Vector2.new(0.5, 0.5)
+infoTag.Size = UDim2.new(0, 180, 0, 18)
+infoTag.BackgroundTransparency = 1
+infoTag.Font = Enum.Font.GothamBold
+infoTag.TextSize = 12
+infoTag.TextColor3 = Color3.fromRGB(0, 255, 140)
+infoTag.Visible = false
+infoTag.Parent = screenGui
+
+local miniBtn = Instance.new("TextButton")
+miniBtn.Name = "MiniToggle"
+miniBtn.Size = UDim2.new(0, 44, 0, 44)
+miniBtn.Position = UDim2.new(0.05, 0, 0.22, 0)
+miniBtn.BackgroundColor3 = Color3.fromRGB(28, 30, 36)
+miniBtn.Text = "SA"
+miniBtn.TextColor3 = Color3.fromRGB(255, 150, 20)
+miniBtn.Font = Enum.Font.GothamBlack
+miniBtn.TextSize = 15
+miniBtn.Parent = screenGui
+
+local miniCorner = Instance.new("UICorner")
+miniCorner.CornerRadius = UDim.new(0, 10)
+miniCorner.Parent = miniBtn
+
+local panel = Instance.new("Frame")
+panel.Name = "MainPanel"
+panel.Size = UDim2.new(0, 250, 0, 270)
+panel.Position = UDim2.new(0.05, 52, 0.22, 0)
+panel.BackgroundColor3 = Color3.fromRGB(22, 24, 28)
+panel.BorderSizePixel = 0
+panel.Visible = true
+panel.Parent = screenGui
+
+local panelCorner = Instance.new("UICorner")
+panelCorner.CornerRadius = UDim.new(0, 8)
+panelCorner.Parent = panel
+
+local panelStroke = Instance.new("UIStroke")
+panelStroke.Color = Color3.fromRGB(70, 180, 90)
+panelStroke.Thickness = 1.5
+panelStroke.Parent = panel
+
+local header = Instance.new("TextLabel")
+header.Size = UDim2.new(1, -12, 0, 28)
+header.Position = UDim2.new(0, 6, 0, 4)
+header.BackgroundTransparency = 1
+header.Text = "SILENT AIM GEMINI"
+header.TextColor3 = Color3.fromRGB(240, 245, 250)
+header.Font = Enum.Font.GothamBold
+header.TextSize = 13
+header.Parent = panel
+
+local scroll = Instance.new("ScrollingFrame")
+scroll.Size = UDim2.new(1, -12, 1, -38)
+scroll.Position = UDim2.new(0, 6, 0, 34)
+scroll.BackgroundTransparency = 1
+scroll.ScrollBarThickness = 4
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scroll.Parent = panel
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 5)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = scroll
+
+layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
+end)
+
+-- Kéo thả panel trên màn hình cảm ứng
+local dragging = false
+local dragStart, startPos
+header.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = panel.Position
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+		local delta = input.Position - dragStart
+		panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
+end)
+
+miniBtn.MouseButton1Click:Connect(function()
+	panel.Visible = not panel.Visible
+end)
+
+local function addBtn(text, order, onClick)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -4, 0, 28)
+	btn.BackgroundColor3 = Color3.fromRGB(36, 39, 46)
+	btn.Text = text
+	btn.TextColor3 = Color3.fromRGB(235, 240, 245)
+	btn.Font = Enum.Font.GothamSemibold
+	btn.TextSize = 11
+	btn.LayoutOrder = order
+	btn.Parent = scroll
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 5)
+	c.Parent = btn
+
+	btn.MouseButton1Click:Connect(function()
+		onClick(btn)
+	end)
+	return btn
+end
+
+addBtn("Silent Aim: TẮT", 1, function(b)
+	Config.Enabled = not Config.Enabled
+	b.Text = Config.Enabled and "Silent Aim: BẬT" or "Silent Aim: TẮT"
+	b.BackgroundColor3 = Config.Enabled and Color3.fromRGB(48, 115, 52) or Color3.fromRGB(36, 39, 46)
+end)
+
+addBtn("Mục tiêu: " .. Config.AimMode, 2, function(b)
+	Config.AimMode = cyclePreset(AIM_TARGET_MODES, Config.AimMode, "Player + NPC")
+	b.Text = "Mục tiêu: " .. Config.AimMode
+end)
+
+addBtn("Vùng trúng: " .. Config.TargetPart, 3, function(b)
+	Config.TargetPart = cyclePreset(TARGET_PART_MODES, Config.TargetPart, "Head")
+	b.Text = "Vùng trúng: " .. Config.TargetPart
+end)
+
+addBtn("Tỷ lệ HS: " .. Config.HeadshotChance .. "%", 4, function(b)
+	Config.HeadshotChance = cyclePreset(HEADSHOT_CHANCE_PRESETS, Config.HeadshotChance, 50)
+	b.Text = "Tỷ lệ HS: " .. Config.HeadshotChance .. "%"
+end)
+
+addBtn("WallCheck: " .. (Config.WallCheck and "BẬT" or "TẮT"), 5, function(b)
+	Config.WallCheck = not Config.WallCheck
+	b.Text = "WallCheck: " .. (Config.WallCheck and "BẬT" or "TẮT")
+end)
+
+addBtn("Đoán hướng: " .. (Config.AutoSmartAim and "BẬT" or "TẮT"), 6, function(b)
+	Config.AutoSmartAim = not Config.AutoSmartAim
+	b.Text = "Đoán hướng: " .. (Config.AutoSmartAim and "BẬT" or "TẮT")
+end)
+
+addBtn("Đạn thẳng: " .. (Config.StraightBullet and "BẬT" or "TẮT"), 7, function(b)
+	Config.StraightBullet = not Config.StraightBullet
+	b.Text = "Đạn thẳng: " .. (Config.StraightBullet and "BẬT" or "TẮT")
+end)
+
+addBtn("FOV: " .. Config.FOVRadius .. " (+15)", 8, function(b)
+	Config.FOVRadius = (Config.FOVRadius >= 210) and 45 or (Config.FOVRadius + 15)
+	fovCircle.Size = UDim2.new(0, Config.FOVRadius * 2, 0, Config.FOVRadius * 2)
+	b.Text = "FOV: " .. Config.FOVRadius .. " (+15)"
+end)
+
+addBtn("Hiện FOV: " .. (Config.ShowFOV and "BẬT" or "TẮT"), 9, function(b)
+	Config.ShowFOV = not Config.ShowFOV
+	b.Text = "Hiện FOV: " .. (Config.ShowFOV and "BẬT" or "TẮT")
+end)
+
+addBtn("Line & Tag: " .. ((Config.ShowLine or Config.ShowEspInfo) and "BẬT" or "TẮT"), 10, function(b)
+	local nextState = not (Config.ShowLine and Config.ShowEspInfo)
+	Config.ShowLine = nextState
+	Config.ShowEspInfo = nextState
+	b.Text = "Line & Tag: " .. (nextState and "BẬT" or "TẮT")
+end)
+
+addBtn("Tầm bắn: " .. (Config.MaxDistance == 0 and "Vô hạn" or Config.MaxDistance), 11, function(b)
+	if Config.MaxDistance == 0 then Config.MaxDistance = 150
+	elseif Config.MaxDistance == 150 then Config.MaxDistance = 300
+	elseif Config.MaxDistance == 300 then Config.MaxDistance = 600
+	else Config.MaxDistance = 0 end
+	b.Text = "Tầm bắn: " .. (Config.MaxDistance == 0 and "Vô hạn" or Config.MaxDistance)
+end)
+
+addBtn("TeamCheck: " .. (Config.TeamCheck and "BẬT" or "TẮT"), 12, function(b)
+	Config.TeamCheck = not Config.TeamCheck
+	b.Text = "TeamCheck: " .. (Config.TeamCheck and "BẬT" or "TẮT")
+end)
+
+-- ============================================================================
+-- VÒNG LẶP CẬP NHẬT TRẠNG THÁI MỤC TIÊU & HIỂN THỊ
+-- ============================================================================
 
 RunService.RenderStepped:Connect(function(dt)
-	local safeDt = isFiniteNumber(dt) and dt or 0.016
-	elapsedClock = elapsedClock + safeDt
-	updateRainbowUI()
+	elapsedClock = elapsedClock + ((isFiniteNumber(dt) and dt > 0) and math.min(dt, 0.1) or 0.016)
 
-	pcall(function()
-		if elapsedClock - lastSeatCheckTime >= 0.1 then
-			lastSeatCheckTime = elapsedClock
-			syncVehicleAutoState()
-		end
+	local cam = Workspace.CurrentCamera
+	fovCircle.Visible = Config.Enabled and Config.ShowFOV and (cam ~= nil)
 
-		local cam = Workspace.CurrentCamera
-		local originPos = getOriginPosition(cam)
-		local vp = cam and cam.ViewportSize or Vector2.new(0, 0)
-		local centerPos2D = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
-
-		if isSilentActive() then
-			CachedTarget = usesSilentAim() and findBestTarget(pickModelTargetPart, Config.FOVRadius, Config.WallCheck) or nil
-			CachedChestTarget = usesChestAimbot() and findBestTarget(pickChestPart, Config.AimbotFOVRadius, Config.AimbotWallCheck) or nil
-		else
-			CachedTarget = nil
-			CachedChestTarget = nil
-		end
-
-		local activeLinePart = CachedTarget or CachedChestTarget
-		if activeLinePart and activeLinePart.Parent and isFiniteVector3(activeLinePart.Position) then
-			local rawDist = (activeLinePart.Position - originPos).Magnitude
-			CachedTargetVelocity = estimateTargetVelocity(activeLinePart, safeDt, rawDist)
-			local predPos = computePredictedPosition(originPos, activeLinePart, CachedTargetVelocity)
-			CachedDistance = rawDist
-			CachedAimPos = CachedTarget and predPos or nil
-
-			if CachedChestTarget and CachedChestTarget.Parent and isFiniteVector3(CachedChestTarget.Position) then
-				local chestVel = (activeLinePart == CachedChestTarget) and CachedTargetVelocity or estimateTargetVelocity(CachedChestTarget, safeDt, (CachedChestTarget.Position - originPos).Magnitude)
-				CachedChestAimPos = computePredictedPosition(originPos, CachedChestTarget, chestVel)
-				if usesChestAimbot() then
-					applyChestAimbotWhenFiring(cam, CachedChestTarget, CachedChestAimPos, Config.AimbotStickiness)
-				end
-			else
-				CachedChestAimPos = nil
-			end
-
-			if Config.WallCheck or Config.ShowLine or Config.ShowEspInfo then
-				if elapsedClock - lastWallCheckTime >= 0.06 then
-					lastWallCheckTime = elapsedClock
-					local hum = activeLinePart.Parent:FindFirstChildOfClass("Humanoid")
-					CachedIsWallBlocked, CachedBypassWall = checkWallOcclusion(activeLinePart.Parent, activeLinePart, predPos, hum)
-				end
-			else
-				CachedIsWallBlocked = false
-				CachedBypassWall = false
-			end
-
-			updateTargetLineAndEsp(cam, centerPos2D, predPos or activeLinePart.Position, CachedIsWallBlocked, CachedBypassWall, activeLinePart.Parent.Name, CachedDistance)
-		else
-			CachedTarget = nil
-			CachedAimPos = nil
-			CachedChestTarget = nil
-			CachedChestAimPos = nil
-			CachedTargetVelocity = Vector3.zero
-			CachedDistance = 0
-			CachedIsWallBlocked = false
-			CachedBypassWall = false
-			prevTargetPart = nil
-			prevTargetPos = nil
-			prevTargetVel = nil
-			prevSampleTime = nil
-			hideTargetLine()
-		end
-
-		if elapsedClock - lastEspRenderTime >= 0.033 then
-			lastEspRenderTime = elapsedClock
-			renderEspForModels(cam, originPos)
-		end
-
-		if Config.DebugLog then
-			local currentDesc = CachedTarget and (CachedTarget.Parent.Name .. "." .. CachedTarget.Name) or (CachedChestTarget and ("Chest:" .. CachedChestTarget.Parent.Name) or "NONE")
-			if currentDesc ~= lastLoggedTargetName then
-				lastLoggedTargetName = currentDesc
-				logDebug(string.format("Target: %s | Dist: %.1f | Vel: %.1f", currentDesc, CachedDistance, CachedTargetVelocity.Magnitude))
-			end
-		end
-	end)
-end)
-
--- [SILENT AIM FIX] Giữ biên độ hướng tia gốc để tránh đạn đi sai quãng đường kiểm tra dame của vũ khí
-local function aimDirection(origin, originalDirection, targetPos)
-	if not (isFiniteVector3(origin) and isFiniteVector3(targetPos)) then return originalDirection end
-	local toTarget = targetPos - origin
-	if not isFiniteVector3(toTarget) or toTarget.Magnitude <= 1e-4 then return originalDirection end
-	local mag = (isFiniteVector3(originalDirection) and originalDirection.Magnitude > 0) and originalDirection.Magnitude or toTarget.Magnitude
-	local dir = toTarget.Unit * mag
-	return isFiniteVector3(dir) and dir or originalDirection
-end
-
-local function logHookHit(tag)
-	if not Config.DebugLog then return end
-	if elapsedClock - lastHookLogTime >= 0.5 then
-		lastHookLogTime = elapsedClock
-		logDebug("Hook kich hoat: " .. tag)
-	end
-end
-
-local function safeHookMetamethod(target, metamethod, handler)
-	if hookmetamethod then
-		local ok, oldFn = pcall(hookmetamethod, target, metamethod, handler)
-		if ok and oldFn then return oldFn end
-	end
-	if getrawmetatable and setreadonly then
-		local ok, mt = pcall(getrawmetatable, target)
-		if ok and type(mt) == "table" and type(mt[metamethod]) == "function" then
-			local oldFn = mt[metamethod]
-			pcall(setreadonly, mt, false)
-			mt[metamethod] = function(...) return handler(...) end
-			pcall(setreadonly, mt, true)
-			return oldFn
-		end
-	end
-	return nil
-end
-
-local SUSPICIOUS_REMOTE_PATTERNS = {
-	"kick", "ban", "anticheat", "anti_cheat", "ac_", "flag", "report",
-	"exploit", "cheat", "detect", "security", "sanity", "telemetry", "violation"
-}
-
-local function isSuspiciousClientRemote(inst)
-	if not inst or not (inst:IsA("RemoteEvent") or inst:IsA("RemoteFunction") or inst:IsA("BindableEvent") or inst:IsA("BindableFunction")) then
-		return false
-	end
-	local lowerName = string.lower(inst.Name or "")
-	for _, pat in ipairs(SUSPICIOUS_REMOTE_PATTERNS) do
-		if string.find(lowerName, pat, 1, true) then
-			return true
-		end
-	end
-	return false
-end
-
-pcall(function()
-	if hookfunction and LocalPlayer and type(LocalPlayer.Kick) == "function" then
-		local oldKick
-		oldKick = hookfunction(LocalPlayer.Kick, function(self, ...)
-			if Config.AntiKickClient and self == LocalPlayer then
-				logHookHit("Blocked LocalPlayer:Kick()")
-				return nil
-			end
-			return oldKick(self, ...)
-		end)
-	end
-end)
-
-pcall(function()
-	if hookfunction and TeleportService then
-		if type(TeleportService.Teleport) == "function" then
-			local oldTeleport
-			oldTeleport = hookfunction(TeleportService.Teleport, function(self, ...)
-				if Config.AntiKickClient and not (checkcaller and checkcaller()) then
-					logHookHit("Blocked TeleportService:Teleport")
-					return nil
-				end
-				return oldTeleport(self, ...)
-			end)
-		end
-		if type(TeleportService.TeleportToPlaceInstance) == "function" then
-			local oldTpInst
-			oldTpInst = hookfunction(TeleportService.TeleportToPlaceInstance, function(self, ...)
-				if Config.AntiKickClient and not (checkcaller and checkcaller()) then
-					logHookHit("Blocked TeleportToPlaceInstance")
-					return nil
-				end
-				return oldTpInst(self, ...)
-			end)
-		end
-	end
-end)
-
-pcall(function()
-	if GuiService then
-		GuiService.ErrorMessageChanged:Connect(function()
-			if not Config.AntiKickClient then return end
-			pcall(function() GuiService:ClearError() end)
-		end)
-	end
-end)
-
-pcall(function()
-	if not getnamecallmethod then
-		warn("[SilentAimGemini] Executor khong ho tro getnamecallmethod.")
+	if not Config.Enabled or not cam then
+		lineFrame.Visible = false
+		infoTag.Visible = false
 		return
 	end
-	local oldNamecall
-	oldNamecall = safeHookMetamethod(game, "__namecall", function(self, ...)
-		local okMethod, method = pcall(getnamecallmethod)
-		if okMethod then
-			if Config.AntiKickClient then
-				if method == "Kick" and self == LocalPlayer then
-					logHookHit("Blocked __namecall Kick")
-					return nil
+
+	local vp = cam.ViewportSize
+	local centerX = vp.X * 0.5
+	local centerY = vp.Y * 0.5
+	local originPos = getOriginPosition(cam)
+
+	local targetPart, aimPos, worldDist, blocked = findBestSilentTarget(cam, originPos, centerX, centerY, elapsedClock)
+	if targetPart and aimPos and isFiniteVector3(aimPos) then
+		local sp, onScreen = cam:WorldToViewportPoint(aimPos)
+		if onScreen and isFiniteNumber(sp.Z) and sp.Z > 0 then
+			local col = blocked and Color3.fromRGB(245, 248, 255) or Color3.fromRGB(0, 255, 140)
+			if Config.ShowLine then
+				local dx = sp.X - centerX
+				local dy = sp.Y - centerY
+				local dist2D = math.sqrt(dx * dx + dy * dy)
+				if dist2D > 1 then
+					lineFrame.Size = UDim2.new(0, dist2D, 0, 2)
+					lineFrame.Position = UDim2.new(0, (centerX + sp.X) * 0.5, 0, (centerY + sp.Y) * 0.5)
+					lineFrame.Rotation = math.deg(math.atan2(dy, dx))
+					lineFrame.BackgroundColor3 = col
+					lineFrame.Visible = true
+				else
+					lineFrame.Visible = false
 				end
-				if (method == "FireServer" or method == "InvokeServer") and isSuspiciousClientRemote(self) then
-					if not checkcaller or not checkcaller() then
-						logHookHit("Blocked suspicious remote: " .. tostring(self.Name))
-						return nil
-					end
-				end
+			else
+				lineFrame.Visible = false
 			end
 
-			if usesSilentAim() and self == Workspace and CachedTarget and CachedAimPos then
-				if method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
-					if not checkcaller or not checkcaller() then
-						if method == "Raycast" then
-							local origin, direction, params = ...
-							if isFiniteVector3(origin) and isFiniteVector3(direction) then
-								logHookHit("Workspace:Raycast")
-								return oldNamecall(self, origin, aimDirection(origin, direction, CachedAimPos), params)
-							end
-						else
-							local ray, ignoreOrList, terrainCellsAreCsg, ignoreWater = ...
-							if typeof(ray) == "Ray" and isFiniteVector3(ray.Origin) and isFiniteVector3(ray.Direction) then
-								logHookHit("Workspace:" .. method)
-								return oldNamecall(self, Ray.new(ray.Origin, aimDirection(ray.Origin, ray.Direction, CachedAimPos)), ignoreOrList, terrainCellsAreCsg, ignoreWater)
-							end
-						end
-					end
-				end
+			if Config.ShowEspInfo and targetPart.Parent then
+				infoTag.Text = string.format("%s | %.0fm", targetPart.Parent.Name, worldDist)
+				infoTag.TextColor3 = col
+				infoTag.Position = UDim2.new(0, sp.X, 0, sp.Y - 18)
+				infoTag.Visible = true
+			else
+				infoTag.Visible = false
 			end
+			return
 		end
-		return oldNamecall(self, ...)
-	end)
-end)
-
-pcall(function()
-	local Mouse = LocalPlayer:GetMouse()
-	if Mouse then
-		local oldIndex
-		oldIndex = safeHookMetamethod(Mouse, "__index", function(self, key)
-			if usesSilentAim() and self == Mouse and CachedTarget and CachedAimPos then
-				if (key == "Hit" or key == "Target" or key == "UnitRay") and (not checkcaller or not checkcaller()) then
-					if key == "Hit" then
-						logHookHit("Mouse.Hit")
-						return CFrame.new(CachedAimPos)
-					elseif key == "Target" then
-						logHookHit("Mouse.Target")
-						return CachedTarget
-					elseif key == "UnitRay" then
-						local cam = Workspace.CurrentCamera
-						if cam and isFiniteVector3(cam.CFrame.Position) then
-							local origin = cam.CFrame.Position
-							local delta = CachedAimPos - origin
-							if isFiniteVector3(delta) and delta.Magnitude > 1e-4 then
-								logHookHit("Mouse.UnitRay")
-								return Ray.new(origin, delta.Unit)
-							end
-						end
-					end
-				end
-			end
-			return oldIndex(self, key)
-		end)
 	end
+
+	lineFrame.Visible = false
+	infoTag.Visible = false
 end)
