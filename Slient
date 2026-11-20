@@ -1,5 +1,5 @@
 -- ============================================================================
--- SILENT AIM GEMINI - SAFE UI + FIXED AIM (MOBILE FRIENDLY)
+-- SILENT AIM GEMINI - PHẦN 1/2 (CONFIG, SAVE/LOAD, ESP POOL, UI & INPUT)
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -9,21 +9,12 @@ local Workspace = game:GetService("Workspace")
 local TeleportService = game:GetService("TeleportService")
 local GuiService = game:GetService("GuiService")
 
-local function safeWaitLocalPlayer()
-	local lp = Players.LocalPlayer
-	local tries = 0
-	while not lp and tries < 100 do
-		tries += 1
-		task.wait(0.1)
-		lp = Players.LocalPlayer
-	end
-	return lp
-end
-
-local LocalPlayer = safeWaitLocalPlayer()
+local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
-	warn("[SilentAimGemini] Khong tim thay LocalPlayer.")
-	return
+	repeat
+		task.wait(0.1)
+		LocalPlayer = Players.LocalPlayer
+	until LocalPlayer
 end
 
 local AIM_ENGINE_MODES = { "Silent Aim", "Aimbot Ngực", "Silent + Aimbot Ngực" }
@@ -47,12 +38,12 @@ local function getDefaultConfig()
 		AutoSeatToggle = true,
 		AntiKickClient = true,
 		SafeAngleClamp = true,
-		MaxSafeAngleDeg = 22,
+		MaxSafeAngleDeg = 18,
 		AimMode = "Player + NPC",
 		TeamCheck = false,
 		WallCheck = false,
 		AimbotWallCheck = false,
-		FOVRadius = 75,
+		FOVRadius = 60,
 		ShowFOV = false,
 		AimbotFOVRadius = 60,
 		ShowAimbotFOV = false,
@@ -69,11 +60,11 @@ local function getDefaultConfig()
 		TargetPart = "Head",
 		HeadshotChance = 50,
 		MaxDistance = 0,
-		AutoSmartAim = true,
+		AutoSmartAim = false,
 		NoRecoil = false,
 		StraightBullet = false,
-		BulletSpeed = 850,
-		MaxLeadTime = 0.28,
+		BulletSpeed = 650,
+		MaxLeadTime = 0.42,
 		SevenFingerGesture = true,
 		AutoLoadEnabled = false,
 		SaveName = "Default",
@@ -667,32 +658,31 @@ local function updateTargetLineAndEsp(cam, startPos2D, worldPoint, isBlockedByWa
 	end
 end
 
-local lockedPartByModel = {}
-local lockedPartExpireAt = {}
+-- Khóa ngắn part ngẫu nhiên theo model để không bị giật qua lại giữa đầu & thân gây trượt dame
+local silentPartLock = {}
+local silentPartLockExpiry = {}
 
 local function pickModelTargetPart(model)
 	if not model then return nil end
 	local head = model:FindFirstChild("Head")
 	local hrp = model:FindFirstChild("HumanoidRootPart")
-
 	if Config.TargetPart == "Random" then
 		local hasHead = head and head:IsA("BasePart")
 		local hasHrp = hrp and hrp:IsA("BasePart")
 		if hasHead and hasHrp then
-			local exp = lockedPartExpireAt[model] or 0
-			local cached = lockedPartByModel[model]
-			if cached and cached.Parent == model and elapsedClock < exp then
-				return cached
+			local exp = silentPartLockExpiry[model] or 0
+			local locked = silentPartLock[model]
+			if locked and locked.Parent == model and elapsedClock < exp then
+				return locked
 			end
 			local chance = math.clamp(tonumber(Config.HeadshotChance) or 50, 0, 100)
-			local picked = (math.random(1, 100) <= chance) and head or hrp
-			lockedPartByModel[model] = picked
-			lockedPartExpireAt[model] = elapsedClock + 0.45
-			return picked
+			local chosenRandom = (math.random(1, 100) <= chance) and head or hrp
+			silentPartLock[model] = chosenRandom
+			silentPartLockExpiry[model] = elapsedClock + 0.35
+			return chosenRandom
 		end
 		return (hasHead and head) or (hasHrp and hrp) or nil
 	end
-
 	local chosen = model:FindFirstChild(Config.TargetPart) or hrp
 	return (chosen and chosen:IsA("BasePart")) and chosen or nil
 end
@@ -707,26 +697,15 @@ local function pickChestPart(model)
 end
 
 local function mountGui(gui)
-	local mounted = false
-	if type(gethui) == "function" then
+	local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 10)
+	if gethui then
 		local ok, hui = pcall(gethui)
-		if ok and typeof(hui) == "Instance" then
-			mounted = pcall(function() gui.Parent = hui end)
-		end
+		if ok and hui and pcall(function() gui.Parent = hui end) then return true end
 	end
-	if not mounted then
-		local okCore, core = pcall(function() return game:GetService("CoreGui") end)
-		if okCore and typeof(core) == "Instance" then
-			mounted = pcall(function() gui.Parent = core end)
-		end
-	end
-	if not mounted then
-		local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 10)
-		if playerGui then
-			mounted = pcall(function() gui.Parent = playerGui end)
-		end
-	end
-	return mounted
+	local okCore, core = pcall(function() return game:GetService("CoreGui") end)
+	if okCore and core and pcall(function() gui.Parent = core end) then return true end
+	if playerGui and pcall(function() gui.Parent = playerGui end) then return true end
+	return false
 end
 
 local MENU_WIDTH = 340
@@ -786,7 +765,7 @@ local function applyMenuVisibilityAndMinimize()
 	end
 end
 
-local function buildUI()
+pcall(function()
 	ScreenGui = Instance.new("ScreenGui")
 	ScreenGui.Name = "SilentAimGeminiGUI"
 	ScreenGui.ResetOnSpawn = false
@@ -872,7 +851,6 @@ local function buildUI()
 	MainFrame.BackgroundColor3 = COLOR_BG_DARK
 	MainFrame.BorderSizePixel = 0
 	MainFrame.ClipsDescendants = true
-	MainFrame.Visible = true
 	MainFrame.ZIndex = 10
 	MainFrame.Parent = ScreenGui
 
@@ -909,7 +887,7 @@ local function buildUI()
 	Title.Size = UDim2.new(1, -66, 1, 0)
 	Title.Position = UDim2.new(0, 24, 0, 0)
 	Title.BackgroundTransparency = 1
-	Title.Text = "Silent Aim Gemini [Ready]"
+	Title.Text = "Silent Aim Gemini [Anti-Ban]"
 	Title.TextColor3 = Color3.fromRGB(235, 238, 242)
 	Title.Font = Enum.Font.GothamBold
 	Title.TextSize = 12
@@ -1143,6 +1121,7 @@ local function buildUI()
 		return lbl, minusBtn, plusBtn
 	end
 
+	-- TAB 1: SILENT AIM
 	local silentPage = PageFrames["Silent Aim"]
 	ToggleSilentBtn = createButton(silentPage, "Silent Aim: TẮT", 1)
 	AimModeBtn = createButton(silentPage, getAimModeText(), 2)
@@ -1157,6 +1136,7 @@ local function buildUI()
 	local FOVMinus, FOVPlus
 	FOVLabel, FOVMinus, FOVPlus = createStepper(silentPage, "FOV Silent: " .. tostring(Config.FOVRadius), "-15", "+15", Color3.fromRGB(160, 240, 220), 11)
 
+	-- TAB 2: AIMBOT
 	local aimbotPage = PageFrames["Aimbot"]
 	AimEngineBtn = createButton(aimbotPage, getAimEngineText(), 1)
 	AimbotStickBtn = createButton(aimbotPage, getAimbotStickText(), 2)
@@ -1165,6 +1145,7 @@ local function buildUI()
 	local AimFOVMinus, AimFOVPlus
 	AimbotFOVLabel, AimFOVMinus, AimFOVPlus = createStepper(aimbotPage, "FOV Aimbot: " .. tostring(Config.AimbotFOVRadius), "-10", "+10", Color3.fromRGB(255, 115, 125), 5)
 
+	-- TAB 3: ESP
 	local espPage = PageFrames["ESP"]
 	ToggleBox2DBtn = createButton(espPage, getToggleBox2DText(), 1)
 	ToggleHealthBarBtn = createButton(espPage, getToggleHealthBarText(), 2)
@@ -1177,6 +1158,7 @@ local function buildUI()
 	ToggleEspInfoBtn = createButton(espPage, "Tên & Khoảng cách ESP: TẮT", 9)
 	TeamCheckBtn = createButton(espPage, "Kiểm tra đồng đội: TẮT", 10)
 
+	-- TAB 4: SETTINGS
 	local settingsPage = PageFrames["Settings"]
 	AntiKickBtn = createButton(settingsPage, getAntiKickText(), 1)
 	AntiKickBtn.BackgroundColor3 = Color3.fromRGB(56, 118, 29)
@@ -1445,14 +1427,12 @@ local function buildUI()
 
 	mountGui(ScreenGui)
 
-	pcall(function()
-		local autoFlag, autoName = loadAutoLoadMeta()
-		if autoFlag then
-			Config.AutoLoadEnabled = true
-			loadConfigByName(autoName, true)
-			setSaveStatus("Auto Load: " .. Config.SaveName, true)
-		end
-	end)
+	local autoFlag, autoName = loadAutoLoadMeta()
+	if autoFlag then
+		Config.AutoLoadEnabled = true
+		loadConfigByName(autoName, true)
+		setSaveStatus("Auto Load: " .. Config.SaveName, true)
+	end
 
 	switchTab(Config.ActiveTab)
 	syncAllUiTexts()
@@ -1460,14 +1440,9 @@ local function buildUI()
 	AntiKickBtn.BackgroundColor3 = Config.AntiKickClient and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
 	SafeAngleBtn.BackgroundColor3 = Config.SafeAngleClamp and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
 	SevenFingerBtn.BackgroundColor3 = Config.SevenFingerGesture and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
-end
+end)
 
-local okUi, errUi = pcall(buildUI)
-if not okUi then
-	warn("[SilentAimGemini] Loi tao UI: " .. tostring(errUi))
-end
-
-UserInputService.InputBegan:Connect(function(input)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		isFiringInputHeld = true
 	elseif input.UserInputType == Enum.UserInputType.Touch then
@@ -1482,7 +1457,7 @@ UserInputService.InputBegan:Connect(function(input)
 				applyMenuVisibilityAndMinimize()
 			end
 		end
-		isFiringInputHeld = true
+		if not gameProcessed then isFiringInputHeld = true end
 	end
 end)
 
@@ -1498,6 +1473,10 @@ UserInputService.InputEnded:Connect(function(input)
 		if activeTouchCount == 0 then isFiringInputHeld = false end
 	end
 end)
+
+-- ============================================================================
+-- SILENT AIM GEMINI - PHẦN 2/2 (CHỈ CHỈNH SILENT AIM, GIỮ NGUYÊN CÁC PHẦN KHÁC)
+-- ============================================================================
 
 local CachedTarget = nil
 local CachedAimPos = nil
@@ -1590,6 +1569,7 @@ local function triggerAsyncNpcScan()
 	end)
 end
 
+-- [SILENT AIM FIX] Tính vận tốc theo thời gian thực để tránh đoán lệch khi FPS dao động ở tầm xa
 local function estimateTargetVelocity(part, dt, distance)
 	if not part or not part:IsA("BasePart") or not isFiniteVector3(part.Position) then
 		return Vector3.zero
@@ -1599,13 +1579,13 @@ local function estimateTargetVelocity(part, dt, distance)
 	if not isFiniteVector3(assemblyVel) then assemblyVel = Vector3.zero end
 	local estimatedVel = assemblyVel
 
-	local sampleDt = (prevSampleTime and (elapsedClock - prevSampleTime) > 0.001) and (elapsedClock - prevSampleTime) or dt
-	if prevTargetPart == part and prevTargetPos and sampleDt and sampleDt > 0.001 then
-		local frameVel = (currentPos - prevTargetPos) / sampleDt
-		if isFiniteVector3(frameVel) and frameVel.Magnitude < 220 then
-			local farFactor = Config.AutoSmartAim and math.clamp(((distance or 0) - 80) / 350, 0, 1) or 0
-			local blend = 0.65 - (farFactor * 0.2)
-			estimatedVel = (assemblyVel.Magnitude > frameVel.Magnitude * 0.55) and assemblyVel:Lerp(frameVel, blend) or frameVel
+	local realDt = (prevSampleTime and (elapsedClock - prevSampleTime) > 0.001) and (elapsedClock - prevSampleTime) or dt
+	if prevTargetPart == part and prevTargetPos and realDt and realDt > 0.001 then
+		local frameVel = (currentPos - prevTargetPos) / realDt
+		if isFiniteVector3(frameVel) and frameVel.Magnitude < 240 then
+			local farFactor = Config.AutoSmartAim and math.clamp(((distance or 0) - 70) / 350, 0, 1) or 0
+			local blend = 0.68 - (farFactor * 0.18)
+			estimatedVel = (assemblyVel.Magnitude > frameVel.Magnitude * 0.5) and assemblyVel:Lerp(frameVel, blend) or frameVel
 		end
 	end
 
@@ -1616,32 +1596,32 @@ local function estimateTargetVelocity(part, dt, distance)
 	return isFiniteVector3(estimatedVel) and estimatedVel or Vector3.zero
 end
 
+-- [SILENT AIM FIX] Cân bằng tầm gần (giảm văng/dame ảo) và tầm xa (tính lead theo quãng đường & dt thực)
 local function computePredictedPosition(origin, part, velocity)
 	if not part or not isFiniteVector3(part.Position) then return nil end
 	local basePos = part.Position
 	if Config.StraightBullet or not Config.AutoSmartAim or not isFiniteVector3(origin) then
 		return basePos
 	end
-
 	local dist = (basePos - origin).Magnitude
 	local moveSpeed = isFiniteVector3(velocity) and velocity.Magnitude or 0
-	if moveSpeed < 1.5 then return basePos end
+	if moveSpeed < 1.3 then return basePos end
 
-	local nearScale = math.clamp((dist - 18) / 36, 0, 1)
-	if nearScale <= 0.03 then return basePos end
+	local nearScale = math.clamp((dist - 15) / 34, 0, 1)
+	if nearScale <= 0.02 then return basePos end
 
-	local farFactor = math.clamp((dist - 60) / 380, 0, 1)
-	local effectiveSpeed = math.max(240, Config.BulletSpeed * (1 - farFactor * 0.18))
+	local farFactor = math.clamp((dist - 55) / 360, 0, 1)
+	local effectiveSpeed = math.max(200, Config.BulletSpeed * (1 - farFactor * 0.2))
 	local rawLead = dist / effectiveSpeed
-	local dynamicMaxLead = math.min(Config.MaxLeadTime, 0.12 + (farFactor * 0.16))
+	local dynamicMaxLead = math.min(Config.MaxLeadTime, 0.14 + (farFactor * 0.2))
 	local leadTime = math.clamp(rawLead * nearScale, 0, dynamicMaxLead)
 
-	local sampleDt = (prevSampleTime and (elapsedClock - prevSampleTime) > 0.002) and (elapsedClock - prevSampleTime) or 0.016
+	local realDt = (prevSampleTime and (elapsedClock - prevSampleTime) > 0.002) and (elapsedClock - prevSampleTime) or 0.016
 	local accelTerm = Vector3.zero
-	if prevTargetVel and isFiniteVector3(prevTargetVel) and sampleDt > 0.002 then
-		local accel = (velocity - prevTargetVel) / sampleDt
-		if isFiniteVector3(accel) and accel.Magnitude < 120 then
-			accelTerm = accel * (0.5 * leadTime * leadTime) * 0.25
+	if prevTargetVel and isFiniteVector3(prevTargetVel) and realDt > 0.002 then
+		local accel = (velocity - prevTargetVel) / realDt
+		if isFiniteVector3(accel) and accel.Magnitude < 150 then
+			accelTerm = accel * (0.5 * leadTime * leadTime) * 0.3
 		end
 	end
 
@@ -1699,7 +1679,7 @@ local function isWithinSafeServerAngle(cam, worldPos)
 	if not Config.SafeAngleClamp or not cam then return true end
 	local lookDir = cam.CFrame.LookVector
 	local toTarget = worldPos - cam.CFrame.Position
-	if toTarget.Magnitude <= 14 then return true end
+	if toTarget.Magnitude <= 12 then return true end
 	local dot = math.clamp(lookDir.Unit:Dot(toTarget.Unit), -1, 1)
 	local angleDeg = math.deg(math.acos(dot))
 	return angleDeg <= Config.MaxSafeAngleDeg
@@ -2017,7 +1997,7 @@ local function updateRainbowUI()
 end
 
 RunService.RenderStepped:Connect(function(dt)
-	local safeDt = (isFiniteNumber(dt) and dt > 0) and math.min(dt, 0.1) or 0.016
+	local safeDt = isFiniteNumber(dt) and dt or 0.016
 	elapsedClock = elapsedClock + safeDt
 	updateRainbowUI()
 
@@ -2101,6 +2081,7 @@ RunService.RenderStepped:Connect(function(dt)
 	end)
 end)
 
+-- [SILENT AIM FIX] Giữ biên độ hướng tia gốc để tránh đạn đi sai quãng đường kiểm tra dame của vũ khí
 local function aimDirection(origin, originalDirection, targetPos)
 	if not (isFiniteVector3(origin) and isFiniteVector3(targetPos)) then return originalDirection end
 	local toTarget = targetPos - origin
@@ -2119,22 +2100,18 @@ local function logHookHit(tag)
 end
 
 local function safeHookMetamethod(target, metamethod, handler)
-	if type(hookmetamethod) == "function" then
+	if hookmetamethod then
 		local ok, oldFn = pcall(hookmetamethod, target, metamethod, handler)
 		if ok and oldFn then return oldFn end
 	end
-	if type(getrawmetatable) == "function" and type(setreadonly) == "function" then
+	if getrawmetatable and setreadonly then
 		local ok, mt = pcall(getrawmetatable, target)
 		if ok and type(mt) == "table" and type(mt[metamethod]) == "function" then
 			local oldFn = mt[metamethod]
-			local okSet = pcall(setreadonly, mt, false)
-			if okSet then
-				local okAssign = pcall(function()
-					mt[metamethod] = function(...) return handler(...) end
-				end)
-				pcall(setreadonly, mt, true)
-				if okAssign then return oldFn end
-			end
+			pcall(setreadonly, mt, false)
+			mt[metamethod] = function(...) return handler(...) end
+			pcall(setreadonly, mt, true)
+			return oldFn
 		end
 	end
 	return nil
@@ -2159,7 +2136,7 @@ local function isSuspiciousClientRemote(inst)
 end
 
 pcall(function()
-	if type(hookfunction) == "function" and LocalPlayer and type(LocalPlayer.Kick) == "function" then
+	if hookfunction and LocalPlayer and type(LocalPlayer.Kick) == "function" then
 		local oldKick
 		oldKick = hookfunction(LocalPlayer.Kick, function(self, ...)
 			if Config.AntiKickClient and self == LocalPlayer then
@@ -2172,11 +2149,11 @@ pcall(function()
 end)
 
 pcall(function()
-	if type(hookfunction) == "function" and TeleportService then
+	if hookfunction and TeleportService then
 		if type(TeleportService.Teleport) == "function" then
 			local oldTeleport
 			oldTeleport = hookfunction(TeleportService.Teleport, function(self, ...)
-				if Config.AntiKickClient and not (type(checkcaller) == "function" and checkcaller()) then
+				if Config.AntiKickClient and not (checkcaller and checkcaller()) then
 					logHookHit("Blocked TeleportService:Teleport")
 					return nil
 				end
@@ -2186,7 +2163,7 @@ pcall(function()
 		if type(TeleportService.TeleportToPlaceInstance) == "function" then
 			local oldTpInst
 			oldTpInst = hookfunction(TeleportService.TeleportToPlaceInstance, function(self, ...)
-				if Config.AntiKickClient and not (type(checkcaller) == "function" and checkcaller()) then
+				if Config.AntiKickClient and not (checkcaller and checkcaller()) then
 					logHookHit("Blocked TeleportToPlaceInstance")
 					return nil
 				end
@@ -2206,13 +2183,12 @@ pcall(function()
 end)
 
 pcall(function()
-	if type(getnamecallmethod) ~= "function" then
+	if not getnamecallmethod then
 		warn("[SilentAimGemini] Executor khong ho tro getnamecallmethod.")
 		return
 	end
 	local oldNamecall
 	oldNamecall = safeHookMetamethod(game, "__namecall", function(self, ...)
-		if not oldNamecall then return end
 		local okMethod, method = pcall(getnamecallmethod)
 		if okMethod then
 			if Config.AntiKickClient then
@@ -2221,7 +2197,7 @@ pcall(function()
 					return nil
 				end
 				if (method == "FireServer" or method == "InvokeServer") and isSuspiciousClientRemote(self) then
-					if not (type(checkcaller) == "function" and checkcaller()) then
+					if not checkcaller or not checkcaller() then
 						logHookHit("Blocked suspicious remote: " .. tostring(self.Name))
 						return nil
 					end
@@ -2230,7 +2206,7 @@ pcall(function()
 
 			if usesSilentAim() and self == Workspace and CachedTarget and CachedAimPos then
 				if method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
-					if not (type(checkcaller) == "function" and checkcaller()) then
+					if not checkcaller or not checkcaller() then
 						if method == "Raycast" then
 							local origin, direction, params = ...
 							if isFiniteVector3(origin) and isFiniteVector3(direction) then
@@ -2257,9 +2233,8 @@ pcall(function()
 	if Mouse then
 		local oldIndex
 		oldIndex = safeHookMetamethod(Mouse, "__index", function(self, key)
-			if not oldIndex then return end
 			if usesSilentAim() and self == Mouse and CachedTarget and CachedAimPos then
-				if (key == "Hit" or key == "Target" or key == "UnitRay") and not (type(checkcaller) == "function" and checkcaller()) then
+				if (key == "Hit" or key == "Target" or key == "UnitRay") and (not checkcaller or not checkcaller()) then
 					if key == "Hit" then
 						logHookHit("Mouse.Hit")
 						return CFrame.new(CachedAimPos)
