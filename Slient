@@ -1,5 +1,5 @@
 -- ============================================================================
--- SILENT AIM GEMINI - PHẦN 1/2 (CONFIG, SAVE/LOAD, ESP POOL, UI & INPUT)
+-- SILENT AIM GEMINI - FULL FIXED VERSION (CONFIG, SAVE/LOAD, ESP, AIM, HOOK)
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -38,12 +38,12 @@ local function getDefaultConfig()
 		AutoSeatToggle = true,
 		AntiKickClient = true,
 		SafeAngleClamp = true,
-		MaxSafeAngleDeg = 18,
+		MaxSafeAngleDeg = 22,
 		AimMode = "Player + NPC",
 		TeamCheck = false,
 		WallCheck = false,
 		AimbotWallCheck = false,
-		FOVRadius = 60,
+		FOVRadius = 75,
 		ShowFOV = false,
 		AimbotFOVRadius = 60,
 		ShowAimbotFOV = false,
@@ -60,11 +60,11 @@ local function getDefaultConfig()
 		TargetPart = "Head",
 		HeadshotChance = 50,
 		MaxDistance = 0,
-		AutoSmartAim = false,
+		AutoSmartAim = true,
 		NoRecoil = false,
 		StraightBullet = false,
-		BulletSpeed = 650,
-		MaxLeadTime = 0.42,
+		BulletSpeed = 850,
+		MaxLeadTime = 0.28,
 		SevenFingerGesture = true,
 		AutoLoadEnabled = false,
 		SaveName = "Default",
@@ -657,19 +657,34 @@ local function updateTargetLineAndEsp(cam, startPos2D, worldPoint, isBlockedByWa
 	end
 end
 
+-- Khóa phần trúng theo model để không bị nhảy random liên tục mỗi khung hình
+local lockedPartByModel = {}
+local lockedPartExpireAt = {}
+local elapsedClock = 0
+
 local function pickModelTargetPart(model)
 	if not model then return nil end
 	local head = model:FindFirstChild("Head")
 	local hrp = model:FindFirstChild("HumanoidRootPart")
+
 	if Config.TargetPart == "Random" then
 		local hasHead = head and head:IsA("BasePart")
 		local hasHrp = hrp and hrp:IsA("BasePart")
 		if hasHead and hasHrp then
+			local exp = lockedPartExpireAt[model] or 0
+			local cached = lockedPartByModel[model]
+			if cached and cached.Parent == model and elapsedClock < exp then
+				return cached
+			end
 			local chance = math.clamp(tonumber(Config.HeadshotChance) or 50, 0, 100)
-			return (math.random(1, 100) <= chance) and head or hrp
+			local picked = (math.random(1, 100) <= chance) and head or hrp
+			lockedPartByModel[model] = picked
+			lockedPartExpireAt[model] = elapsedClock + 0.45
+			return picked
 		end
 		return (hasHead and head) or (hasHrp and hrp) or nil
 	end
+
 	local chosen = model:FindFirstChild(Config.TargetPart) or hrp
 	return (chosen and chosen:IsA("BasePart")) and chosen or nil
 end
@@ -874,7 +889,7 @@ pcall(function()
 	Title.Size = UDim2.new(1, -66, 1, 0)
 	Title.Position = UDim2.new(0, 24, 0, 0)
 	Title.BackgroundTransparency = 1
-	Title.Text = "Silent Aim Gemini [Anti-Ban]"
+	Title.Text = "Silent Aim Gemini [Fixed]"
 	Title.TextColor3 = Color3.fromRGB(235, 238, 242)
 	Title.Font = Enum.Font.GothamBold
 	Title.TextSize = 12
@@ -929,7 +944,7 @@ pcall(function()
 	end)
 
 	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType.MouseButton1 then
 			dragging = false
 		end
 	end)
@@ -1429,7 +1444,7 @@ pcall(function()
 	SevenFingerBtn.BackgroundColor3 = Config.SevenFingerGesture and Color3.fromRGB(56, 118, 29) or COLOR_ITEM_DARK
 end)
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
+UserInputService.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		isFiringInputHeld = true
 	elseif input.UserInputType == Enum.UserInputType.Touch then
@@ -1444,7 +1459,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 				applyMenuVisibilityAndMinimize()
 			end
 		end
-		if not gameProcessed then isFiringInputHeld = true end
+		-- Hỗ trợ cả chạm màn hình lẫn nút bắn ảo trên điện thoại
+		isFiringInputHeld = true
 	end
 end)
 
@@ -1459,8 +1475,10 @@ UserInputService.InputEnded:Connect(function(input)
 		if activeTouchCount < 7 then sevenFingerTriggeredThisTouch = false end
 		if activeTouchCount == 0 then isFiringInputHeld = false end
 	end
-end)-- ============================================================================
--- SILENT AIM GEMINI - PHẦN 2/2 (ĐOÁN HƯỚNG, ESP, AIMBOT, HOOK & ANTI-BAN)
+end)
+
+-- ============================================================================
+-- PHẦN 2: ĐOÁN HƯỚNG, ESP, AIMBOT, HOOK & ANTI-BAN
 -- ============================================================================
 
 local CachedTarget = nil
@@ -1478,7 +1496,6 @@ local lastRainbowUpdateTime = 0
 local lastWallCheckTime = 0
 local lastSeatCheckTime = 0
 local lastEspRenderTime = 0
-local elapsedClock = 0
 local isScanningNpc = false
 
 local CachedNpcEntries = {}
@@ -1564,12 +1581,13 @@ local function estimateTargetVelocity(part, dt, distance)
 	if not isFiniteVector3(assemblyVel) then assemblyVel = Vector3.zero end
 	local estimatedVel = assemblyVel
 
-	if prevTargetPart == part and prevTargetPos and prevSampleTime and dt > 0.001 then
-		local frameVel = (currentPos - prevTargetPos) / dt
-		if isFiniteVector3(frameVel) and frameVel.Magnitude < 260 then
-			local farFactor = Config.AutoSmartAim and math.clamp(((distance or 0) - 70) / 350, 0, 1) or 0
-			local blend = 0.72 - (farFactor * 0.22)
-			estimatedVel = (assemblyVel.Magnitude > frameVel.Magnitude * 0.5) and assemblyVel:Lerp(frameVel, blend) or frameVel
+	local sampleDt = (prevSampleTime and (elapsedClock - prevSampleTime) > 0.001) and (elapsedClock - prevSampleTime) or dt
+	if prevTargetPart == part and prevTargetPos and sampleDt and sampleDt > 0.001 then
+		local frameVel = (currentPos - prevTargetPos) / sampleDt
+		if isFiniteVector3(frameVel) and frameVel.Magnitude < 220 then
+			local farFactor = Config.AutoSmartAim and math.clamp(((distance or 0) - 80) / 350, 0, 1) or 0
+			local blend = 0.65 - (farFactor * 0.2)
+			estimatedVel = (assemblyVel.Magnitude > frameVel.Magnitude * 0.55) and assemblyVel:Lerp(frameVel, blend) or frameVel
 		end
 	end
 
@@ -1586,24 +1604,27 @@ local function computePredictedPosition(origin, part, velocity)
 	if Config.StraightBullet or not Config.AutoSmartAim or not isFiniteVector3(origin) then
 		return basePos
 	end
+
 	local dist = (basePos - origin).Magnitude
 	local moveSpeed = isFiniteVector3(velocity) and velocity.Magnitude or 0
-	if moveSpeed < 1.2 then return basePos end
+	if moveSpeed < 1.5 then return basePos end
 
-	local nearScale = math.clamp((dist - 12) / 34, 0, 1)
-	if nearScale <= 0.02 then return basePos end
+	-- Tầm gần (< 18 studs): ưu tiên bám sát vị trí thật để không bắn lệch/dame ảo
+	local nearScale = math.clamp((dist - 18) / 36, 0, 1)
+	if nearScale <= 0.03 then return basePos end
 
-	local farFactor = math.clamp((dist - 55) / 360, 0, 1)
-	local effectiveSpeed = math.max(170, Config.BulletSpeed * (1 - farFactor * 0.24))
+	local farFactor = math.clamp((dist - 60) / 380, 0, 1)
+	local effectiveSpeed = math.max(240, Config.BulletSpeed * (1 - farFactor * 0.18))
 	local rawLead = dist / effectiveSpeed
-	local dynamicMaxLead = math.min(Config.MaxLeadTime, 0.16 + (farFactor * 0.26))
+	local dynamicMaxLead = math.min(Config.MaxLeadTime, 0.12 + (farFactor * 0.16))
 	local leadTime = math.clamp(rawLead * nearScale, 0, dynamicMaxLead)
 
+	local sampleDt = (prevSampleTime and (elapsedClock - prevSampleTime) > 0.002) and (elapsedClock - prevSampleTime) or 0.016
 	local accelTerm = Vector3.zero
-	if prevTargetVel and isFiniteVector3(prevTargetVel) then
-		local accel = (velocity - prevTargetVel) / 0.016
-		if isFiniteVector3(accel) and accel.Magnitude < 180 then
-			accelTerm = accel * (0.5 * leadTime * leadTime) * 0.45
+	if prevTargetVel and isFiniteVector3(prevTargetVel) and sampleDt > 0.002 then
+		local accel = (velocity - prevTargetVel) / sampleDt
+		if isFiniteVector3(accel) and accel.Magnitude < 120 then
+			accelTerm = accel * (0.5 * leadTime * leadTime) * 0.25
 		end
 	end
 
@@ -1661,7 +1682,7 @@ local function isWithinSafeServerAngle(cam, worldPos)
 	if not Config.SafeAngleClamp or not cam then return true end
 	local lookDir = cam.CFrame.LookVector
 	local toTarget = worldPos - cam.CFrame.Position
-	if toTarget.Magnitude <= 12 then return true end
+	if toTarget.Magnitude <= 14 then return true end
 	local dot = math.clamp(lookDir.Unit:Dot(toTarget.Unit), -1, 1)
 	local angleDeg = math.deg(math.acos(dot))
 	return angleDeg <= Config.MaxSafeAngleDeg
@@ -1979,7 +2000,7 @@ local function updateRainbowUI()
 end
 
 RunService.RenderStepped:Connect(function(dt)
-	local safeDt = isFiniteNumber(dt) and dt or 0.016
+	local safeDt = (isFiniteNumber(dt) and dt > 0) and math.min(dt, 0.1) or 0.016
 	elapsedClock = elapsedClock + safeDt
 	updateRainbowUI()
 
@@ -2066,7 +2087,7 @@ end)
 local function aimDirection(origin, originalDirection, targetPos)
 	if not (isFiniteVector3(origin) and isFiniteVector3(targetPos)) then return originalDirection end
 	local toTarget = targetPos - origin
-	if not isFiniteVector3(toTarget) or toTarget.Magnitude <= 1e-5 then return originalDirection end
+	if not isFiniteVector3(toTarget) or toTarget.Magnitude <= 1e-4 then return originalDirection end
 	local mag = (isFiniteVector3(originalDirection) and originalDirection.Magnitude > 0) and originalDirection.Magnitude or toTarget.Magnitude
 	local dir = toTarget.Unit * mag
 	return isFiniteVector3(dir) and dir or originalDirection
@@ -2227,7 +2248,7 @@ pcall(function()
 						if cam and isFiniteVector3(cam.CFrame.Position) then
 							local origin = cam.CFrame.Position
 							local delta = CachedAimPos - origin
-							if isFiniteVector3(delta) and delta.Magnitude > 1e-5 then
+							if isFiniteVector3(delta) and delta.Magnitude > 1e-4 then
 								logHookHit("Mouse.UnitRay")
 								return Ray.new(origin, delta.Unit)
 							end
