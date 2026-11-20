@@ -1,5 +1,5 @@
 -- ============================================================================
--- SILENT AIM GEMINI - KHÔI PHỤC MENU GỐC (AN TOÀN CHO MOBILE)
+-- SILENT AIM GEMINI - BẢN ĐẦY ĐỦ GIỮ NGUYÊN CẤU TRÚC CŨ (ĐÃ CHỈNH LỖI/ĐÈ)
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -234,7 +234,7 @@ local function loadAutoLoadMeta()
 		pcall(function() exists = isfile(AUTO_LOAD_META_FILE) end)
 		if exists then
 			local ok, raw = pcall(readfile, AUTO_LOAD_META_FILE)
-			if ok and type(raw) == "string" then
+			if ok and type(raw) == "string" and type(loadstring) == "function" then
 				local fn = loadstring(raw)
 				if type(fn) == "function" then
 					local okRun, data = pcall(fn)
@@ -256,7 +256,7 @@ local function loadConfigByName(rawName, silentMode)
 		pcall(function() exists = isfile(path) end)
 		if exists then
 			local ok, raw = pcall(readfile, path)
-			if ok and type(raw) == "string" then
+			if ok and type(raw) == "string" and type(loadstring) == "function" then
 				local fn = loadstring(raw)
 				if type(fn) == "function" then
 					local okRun, data = pcall(fn)
@@ -357,7 +357,7 @@ local function getOrCreateEspVisual(key)
 	boxFrame.BorderSizePixel = 0
 	boxFrame.Visible = false
 	boxFrame.Active = false
-	boxFrame.ZIndex = 2
+	boxFrame.ZIndex = 12
 	boxFrame.Parent = EspOverlayFolder
 
 	local boxStroke = Instance.new("UIStroke")
@@ -372,7 +372,7 @@ local function getOrCreateEspVisual(key)
 	hpBg.BorderSizePixel = 0
 	hpBg.Visible = false
 	hpBg.Active = false
-	hpBg.ZIndex = 2
+	hpBg.ZIndex = 12
 	hpBg.Parent = EspOverlayFolder
 
 	local hpFill = Instance.new("Frame")
@@ -383,7 +383,7 @@ local function getOrCreateEspVisual(key)
 	hpFill.BackgroundColor3 = COLOR_HP_GREEN
 	hpFill.BorderSizePixel = 0
 	hpFill.Active = false
-	hpFill.ZIndex = 3
+	hpFill.ZIndex = 13
 	hpFill.Parent = hpBg
 
 	local headDot = Instance.new("Frame")
@@ -395,7 +395,7 @@ local function getOrCreateEspVisual(key)
 	headDot.BorderSizePixel = 0
 	headDot.Visible = false
 	headDot.Active = false
-	headDot.ZIndex = 3
+	headDot.ZIndex = 13
 	headDot.Parent = EspOverlayFolder
 
 	local headDotCorner = Instance.new("UICorner")
@@ -411,7 +411,7 @@ local function getOrCreateEspVisual(key)
 		line.BorderSizePixel = 0
 		line.Visible = false
 		line.Active = false
-		line.ZIndex = 1
+		line.ZIndex = 11
 		line.Parent = EspOverlayFolder
 		return line
 	end
@@ -622,6 +622,7 @@ local function updateTargetLineAndEsp(cam, startPos2D, worldPoint, isBlockedByWa
 	end
 end
 
+-- Khóa ngắn mục tiêu ngẫu nhiên theo model để tránh đổi part liên tục làm lệch điểm bắn
 local silentPartLock = {}
 local silentPartLockExpiry = {}
 
@@ -659,20 +660,32 @@ local function pickChestPart(model)
 	return nil
 end
 
--- Ưu tiên PlayerGui để giao diện luôn hiện ổn định trên mobile, dự phòng CoreGui/gethui nếu cần
+-- Xóa GUI cũ trùng tên trước khi gắn để tránh bị đè nhiều lớp giao diện
 local function mountGui(gui)
+	local targets = {}
 	local okPlayerGui, playerGui = pcall(function()
 		return LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 10)
 	end)
-	if okPlayerGui and playerGui and pcall(function() gui.Parent = playerGui end) then
-		return true
-	end
+	if okPlayerGui and playerGui then table.insert(targets, playerGui) end
 	if type(gethui) == "function" then
 		local ok, hui = pcall(gethui)
-		if ok and hui and pcall(function() gui.Parent = hui end) then return true end
+		if ok and hui then table.insert(targets, hui) end
 	end
 	local okCore, core = pcall(function() return game:GetService("CoreGui") end)
-	if okCore and core and pcall(function() gui.Parent = core end) then return true end
+	if okCore and core then table.insert(targets, core) end
+
+	for _, container in ipairs(targets) do
+		pcall(function()
+			local old = container:FindFirstChild("SilentAimGeminiGUI")
+			if old then old:Destroy() end
+		end)
+	end
+
+	for _, container in ipairs(targets) do
+		if pcall(function() gui.Parent = container end) then
+			return true
+		end
+	end
 	return false
 end
 
@@ -733,13 +746,13 @@ local function applyMenuVisibilityAndMinimize()
 	end
 end
 
--- Khởi tạo UI trong block độc lập để không bao giờ bị chặn bởi hook
+-- Khởi tạo UI trong block riêng, phân tầng ZIndex rõ ràng để không bị đè hoặc chèn
 pcall(function()
 	ScreenGui = Instance.new("ScreenGui")
 	ScreenGui.Name = "SilentAimGeminiGUI"
 	ScreenGui.ResetOnSpawn = false
 	ScreenGui.IgnoreGuiInset = true
-	ScreenGui.DisplayOrder = 999999
+	ScreenGui.DisplayOrder = 100000
 	ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 	EspOverlayFolder = Instance.new("Folder")
@@ -756,7 +769,7 @@ pcall(function()
 	TargetLineFrame.BorderSizePixel = 0
 	TargetLineFrame.Visible = false
 	TargetLineFrame.Active = false
-	TargetLineFrame.ZIndex = 2
+	TargetLineFrame.ZIndex = 12
 	TargetLineFrame.Parent = ScreenGui
 
 	EspInfoLabel = Instance.new("TextLabel")
@@ -770,7 +783,7 @@ pcall(function()
 	EspInfoLabel.TextSize = 11
 	EspInfoLabel.Visible = false
 	EspInfoLabel.Active = false
-	EspInfoLabel.ZIndex = 3
+	EspInfoLabel.ZIndex = 13
 	EspInfoLabel.Parent = ScreenGui
 
 	FOVFrame = Instance.new("Frame")
@@ -781,7 +794,7 @@ pcall(function()
 	FOVFrame.BackgroundTransparency = 1
 	FOVFrame.Visible = false
 	FOVFrame.Active = false
-	FOVFrame.ZIndex = 1
+	FOVFrame.ZIndex = 11
 	FOVFrame.Parent = ScreenGui
 
 	local fovCorner = Instance.new("UICorner")
@@ -801,7 +814,7 @@ pcall(function()
 	AimbotFOVFrame.BackgroundTransparency = 1
 	AimbotFOVFrame.Visible = false
 	AimbotFOVFrame.Active = false
-	AimbotFOVFrame.ZIndex = 2
+	AimbotFOVFrame.ZIndex = 12
 	AimbotFOVFrame.Parent = ScreenGui
 
 	local aimFovCorner = Instance.new("UICorner")
@@ -820,7 +833,8 @@ pcall(function()
 	MainFrame.BackgroundColor3 = COLOR_BG_DARK
 	MainFrame.BorderSizePixel = 0
 	MainFrame.ClipsDescendants = true
-	MainFrame.ZIndex = 10
+	MainFrame.Active = true
+	MainFrame.ZIndex = 30
 	MainFrame.Parent = ScreenGui
 
 	local mainCorner = Instance.new("UICorner")
@@ -837,7 +851,7 @@ pcall(function()
 	TopBar.Size = UDim2.new(1, 0, 0, MENU_MIN_HEIGHT)
 	TopBar.BackgroundColor3 = COLOR_HEADER_DARK
 	TopBar.BorderSizePixel = 0
-	TopBar.ZIndex = 11
+	TopBar.ZIndex = 31
 	TopBar.Parent = MainFrame
 
 	local statusDot = Instance.new("Frame")
@@ -845,7 +859,7 @@ pcall(function()
 	statusDot.Position = UDim2.new(0, 10, 0.5, -4)
 	statusDot.BackgroundColor3 = COLOR_ACCENT_GREEN
 	statusDot.BorderSizePixel = 0
-	statusDot.ZIndex = 12
+	statusDot.ZIndex = 32
 	statusDot.Parent = TopBar
 
 	local dotCorner = Instance.new("UICorner")
@@ -861,7 +875,7 @@ pcall(function()
 	Title.Font = Enum.Font.GothamBold
 	Title.TextSize = 12
 	Title.TextXAlignment = Enum.TextXAlignment.Left
-	Title.ZIndex = 12
+	Title.ZIndex = 32
 	Title.Parent = TopBar
 
 	HButton = Instance.new("TextButton")
@@ -874,7 +888,7 @@ pcall(function()
 	HButton.Font = Enum.Font.GothamBlack
 	HButton.TextSize = 20
 	HButton.Visible = false
-	HButton.ZIndex = 12
+	HButton.ZIndex = 32
 	HButton.Parent = MainFrame
 
 	local hCorner = Instance.new("UICorner")
@@ -924,7 +938,7 @@ pcall(function()
 	MinBtn.TextColor3 = Color3.fromRGB(235, 238, 242)
 	MinBtn.Font = Enum.Font.GothamBold
 	MinBtn.TextSize = 14
-	MinBtn.ZIndex = 12
+	MinBtn.ZIndex = 33
 	MinBtn.Parent = TopBar
 
 	local minCorner = Instance.new("UICorner")
@@ -937,7 +951,7 @@ pcall(function()
 	TabBar.Position = UDim2.new(0, 0, 0, MENU_MIN_HEIGHT)
 	TabBar.BackgroundColor3 = COLOR_HEADER_DARK
 	TabBar.BorderSizePixel = 0
-	TabBar.ZIndex = 11
+	TabBar.ZIndex = 31
 	TabBar.Parent = MainFrame
 
 	local tabLayout = Instance.new("UIListLayout")
@@ -966,7 +980,7 @@ pcall(function()
 		page.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
 		page.CanvasSize = UDim2.new(0, 0, 0, 0)
 		page.Visible = false
-		page.ZIndex = 11
+		page.ZIndex = 31
 		page.Parent = MainFrame
 
 		local list = Instance.new("UIListLayout")
@@ -996,7 +1010,7 @@ pcall(function()
 		tBtn.Font = Enum.Font.GothamSemibold
 		tBtn.TextSize = 11
 		tBtn.LayoutOrder = idx
-		tBtn.ZIndex = 12
+		tBtn.ZIndex = 32
 		tBtn.Parent = TabBar
 
 		local tCorner = Instance.new("UICorner")
@@ -1017,7 +1031,7 @@ pcall(function()
 		btn.Font = Enum.Font.GothamSemibold
 		btn.TextSize = 12
 		btn.LayoutOrder = order
-		btn.ZIndex = 12
+		btn.ZIndex = 32
 		btn.Parent = parent
 
 		local corner = Instance.new("UICorner")
@@ -1036,7 +1050,7 @@ pcall(function()
 		frame.Size = UDim2.new(1, 0, 0, 30)
 		frame.BackgroundColor3 = COLOR_ITEM_DARK
 		frame.LayoutOrder = order
-		frame.ZIndex = 12
+		frame.ZIndex = 32
 		frame.Parent = parent
 
 		local corner = Instance.new("UICorner")
@@ -1055,7 +1069,7 @@ pcall(function()
 		minusBtn.TextColor3 = Color3.fromRGB(240, 242, 245)
 		minusBtn.Font = Enum.Font.GothamBold
 		minusBtn.TextSize = 11
-		minusBtn.ZIndex = 13
+		minusBtn.ZIndex = 33
 		minusBtn.Parent = frame
 
 		local mCorner = Instance.new("UICorner")
@@ -1070,7 +1084,7 @@ pcall(function()
 		lbl.TextColor3 = textColor or Color3.fromRGB(235, 238, 242)
 		lbl.Font = Enum.Font.GothamSemibold
 		lbl.TextSize = 12
-		lbl.ZIndex = 13
+		lbl.ZIndex = 33
 		lbl.Parent = frame
 
 		local plusBtn = Instance.new("TextButton")
@@ -1081,7 +1095,7 @@ pcall(function()
 		plusBtn.TextColor3 = Color3.fromRGB(240, 242, 245)
 		plusBtn.Font = Enum.Font.GothamBold
 		plusBtn.TextSize = 11
-		plusBtn.ZIndex = 13
+		plusBtn.ZIndex = 33
 		plusBtn.Parent = frame
 
 		local pCorner = Instance.new("UICorner")
@@ -1138,7 +1152,7 @@ pcall(function()
 	saveNameRow.Size = UDim2.new(1, 0, 0, 30)
 	saveNameRow.BackgroundColor3 = COLOR_ITEM_DARK
 	saveNameRow.LayoutOrder = 5
-	saveNameRow.ZIndex = 12
+	saveNameRow.ZIndex = 32
 	saveNameRow.Parent = settingsPage
 
 	local snCorner = Instance.new("UICorner")
@@ -1159,7 +1173,7 @@ pcall(function()
 	snPrefix.Font = Enum.Font.GothamSemibold
 	snPrefix.TextSize = 11
 	snPrefix.TextXAlignment = Enum.TextXAlignment.Left
-	snPrefix.ZIndex = 13
+	snPrefix.ZIndex = 33
 	snPrefix.Parent = saveNameRow
 
 	SaveNameBox = Instance.new("TextBox")
@@ -1173,7 +1187,7 @@ pcall(function()
 	SaveNameBox.Font = Enum.Font.GothamSemibold
 	SaveNameBox.TextSize = 11
 	SaveNameBox.ClearTextOnFocus = false
-	SaveNameBox.ZIndex = 13
+	SaveNameBox.ZIndex = 33
 	SaveNameBox.Parent = saveNameRow
 
 	local boxCorner = Instance.new("UICorner")
@@ -1194,7 +1208,7 @@ pcall(function()
 	SaveStatusLabel.Font = Enum.Font.Gotham
 	SaveStatusLabel.TextSize = 11
 	SaveStatusLabel.LayoutOrder = 11
-	SaveStatusLabel.ZIndex = 12
+	SaveStatusLabel.ZIndex = 32
 	SaveStatusLabel.Parent = settingsPage
 
 	MinBtn.MouseButton1Click:Connect(function()
@@ -1556,16 +1570,7 @@ local function computePredictedPosition(origin, part, velocity)
 	local dynamicMaxLead = math.min(Config.MaxLeadTime, 0.14 + (farFactor * 0.2))
 	local leadTime = math.clamp(rawLead * nearScale, 0, dynamicMaxLead)
 
-	local realDt = (prevSampleTime and (elapsedClock - prevSampleTime) > 0.002) and (elapsedClock - prevSampleTime) or 0.016
-	local accelTerm = Vector3.zero
-	if prevTargetVel and isFiniteVector3(prevTargetVel) and realDt > 0.002 then
-		local accel = (velocity - prevTargetVel) / realDt
-		if isFiniteVector3(accel) and accel.Magnitude < 150 then
-			accelTerm = accel * (0.5 * leadTime * leadTime) * 0.3
-		end
-	end
-
-	local predicted = basePos + (velocity * leadTime) + accelTerm
+	local predicted = basePos + (velocity * leadTime)
 	return isFiniteVector3(predicted) and predicted or basePos
 end
 
@@ -1999,7 +2004,14 @@ local function logHookHit(tag)
 	end
 end
 
--- Chỉ dùng getrawmetatable + setreadonly khi có đủ hàm; tránh hookmetamethod nếu gây xung đột trên mobile
+local function isCallerInternal()
+	if type(checkcaller) == "function" then
+		local ok, res = pcall(checkcaller)
+		if ok and res == true then return true end
+	end
+	return false
+end
+
 local function safeHookMetamethod(target, metamethod, handler)
 	if type(getrawmetatable) == "function" and type(setreadonly) == "function" then
 		local ok, mt = pcall(getrawmetatable, target)
@@ -2058,7 +2070,7 @@ pcall(function()
 		if type(TeleportService.Teleport) == "function" then
 			local oldTeleport
 			oldTeleport = hookfunction(TeleportService.Teleport, function(self, ...)
-				if Config.AntiKickClient and not (type(checkcaller) == "function" and checkcaller()) then
+				if Config.AntiKickClient and not isCallerInternal() then
 					logHookHit("Blocked TeleportService:Teleport")
 					return nil
 				end
@@ -2068,7 +2080,7 @@ pcall(function()
 		if type(TeleportService.TeleportToPlaceInstance) == "function" then
 			local oldTpInst
 			oldTpInst = hookfunction(TeleportService.TeleportToPlaceInstance, function(self, ...)
-				if Config.AntiKickClient and not (type(checkcaller) == "function" and checkcaller()) then
+				if Config.AntiKickClient and not isCallerInternal() then
 					logHookHit("Blocked TeleportToPlaceInstance")
 					return nil
 				end
@@ -2094,7 +2106,7 @@ pcall(function()
 		if not oldNamecall then return end
 		local okMethod, method = pcall(getnamecallmethod)
 		if okMethod then
-			local fromCaller = (type(checkcaller) == "function" and checkcaller())
+			local fromCaller = isCallerInternal()
 			if Config.AntiKickClient then
 				if method == "Kick" and self == LocalPlayer then
 					logHookHit("Blocked __namecall Kick")
@@ -2135,8 +2147,7 @@ pcall(function()
 		oldIndex = safeHookMetamethod(Mouse, "__index", function(self, key)
 			if not oldIndex then return nil end
 			if usesSilentAim() and self == Mouse and CachedTarget and CachedAimPos then
-				local fromCaller = (type(checkcaller) == "function" and checkcaller())
-				if (key == "Hit" or key == "Target" or key == "UnitRay") and not fromCaller then
+				if (key == "Hit" or key == "Target" or key == "UnitRay") and not isCallerInternal() then
 					if key == "Hit" then
 						logHookHit("Mouse.Hit")
 						return CFrame.new(CachedAimPos)
