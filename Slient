@@ -811,27 +811,12 @@ local function getOrCreateEspEntry(index)
 	distLabel.ZIndex = 5
 	distLabel.Parent = ESPContainer
 
-	local poseLabel = Instance.new("TextLabel")
-	poseLabel.Name = "EspPose_" .. tostring(index)
-	poseLabel.BackgroundTransparency = 1
-	poseLabel.TextColor3 = Color3.fromRGB(255, 245, 140)
-	poseLabel.TextStrokeColor3 = Color3.fromRGB(10, 10, 14)
-	poseLabel.TextStrokeTransparency = 0.15
-	poseLabel.Font = Enum.Font.GothamBold
-	poseLabel.TextSize = 11
-	poseLabel.Text = ""
-	poseLabel.Visible = false
-	poseLabel.Active = false
-	poseLabel.ZIndex = 5
-	poseLabel.Parent = ESPContainer
-
 	local entry = {
 		box = boxFrame,
 		stroke = boxStroke,
 		hpBg = hpBg,
 		hpFill = hpFill,
-		dist = distLabel,
-		pose = poseLabel
+		dist = distLabel
 	}
 	EspVisualPool[index] = entry
 	return entry
@@ -844,51 +829,8 @@ local function hideUnusedEspEntries(startIndex)
 			if entry.box then entry.box.Visible = false end
 			if entry.hpBg then entry.hpBg.Visible = false end
 			if entry.dist then entry.dist.Visible = false end
-			if entry.pose then entry.pose.Visible = false end
 		end
 	end
-end
-
-local function getEnemyStanceLabel(model, hum, hrp, head)
-	if not model or not hum then
-		return "ĐỨNG", Color3.fromRGB(245, 248, 255)
-	end
-
-	local okState, state = pcall(function()
-		return hum:GetState()
-	end)
-
-	if hum.Sit or (hum.SeatPart and hum.SeatPart:IsA("BasePart")) or (okState and state == Enum.HumanoidStateType.Seated) then
-		return "NGỒI", Color3.fromRGB(255, 215, 70)
-	end
-
-	if okState and (
-		state == Enum.HumanoidStateType.FallingDown
-		or state == Enum.HumanoidStateType.Physics
-		or state == Enum.HumanoidStateType.Ragdoll
-	) then
-		return "NẰM", Color3.fromRGB(255, 110, 110)
-	end
-
-	local anchorPart = (hrp and hrp:IsA("BasePart") and hrp) or (head and head:IsA("BasePart") and head) or nil
-	if anchorPart and isFiniteVector3(anchorPart.Position) then
-		local _, _, lookY = anchorPart.CFrame.LookVector:ToEulerAnglesYXZ()
-		local upVec = anchorPart.CFrame.UpVector
-		if isFiniteVector3(upVec) and math.abs(upVec.Y) < 0.45 then
-			return "NẰM", Color3.fromRGB(255, 110, 110)
-		end
-
-		if head and head:IsA("BasePart") and hrp and hrp:IsA("BasePart") then
-			local dy = head.Position.Y - hrp.Position.Y
-			if dy < 0.75 then
-				return "NẰM", Color3.fromRGB(255, 110, 110)
-			elseif dy < 1.25 then
-				return "NGỒI", Color3.fromRGB(255, 215, 70)
-			end
-		end
-	end
-
-	return "ĐỨNG", Color3.fromRGB(245, 248, 255)
 end
 
 local function getHealthColor(ratio)
@@ -1135,22 +1077,6 @@ local function updateESPVisuals(cam, originPos)
 								entry.dist.Visible = true
 							else
 								entry.dist.Visible = false
-							end
-						end
-
-						if entry.pose then
-							if Config.ESPBox or Config.ESPDistance or Config.ESPHealthBar then
-								local stanceText, stanceColor = getEnemyStanceLabel(model, hum, hrp, head)
-								local labelW = math.max(boxW, 56)
-								local labelLeft = math.floor(rx - labelW * 0.5)
-								local labelTop = boxTop - 16
-								entry.pose.Text = stanceText
-								entry.pose.TextColor3 = stanceColor
-								entry.pose.Position = UDim2.new(0, labelLeft, 0, labelTop)
-								entry.pose.Size = UDim2.new(0, labelW, 0, 14)
-								entry.pose.Visible = true
-							else
-								entry.pose.Visible = false
 							end
 						end
 					end
